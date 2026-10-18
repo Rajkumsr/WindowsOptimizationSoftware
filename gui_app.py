@@ -20,7 +20,7 @@ from datetime import datetime
 from typing import Dict, List, Tuple
 import webbrowser
 
-# Enable High-DPI Awareness for razor-sharp rendering on 4K & scaled displays
+# Enable High-DPI Awareness and register AppUserModelID for Windows Taskbar
 if sys.platform == "win32":
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)  # Per-monitor DPI aware
@@ -29,6 +29,13 @@ if sys.platform == "win32":
             ctypes.windll.user32.SetProcessDPIAware()
         except Exception:
             pass
+
+    try:
+        # Decouple from python host so Taskbar binds to our custom app icon
+        app_id = "rajkumarpatil.apexwindowsoptimizer.pro.suite"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except Exception:
+        pass
 
 # Import the core optimization engine
 import core_optimizer
@@ -196,10 +203,39 @@ class ApexOptimizerApp:
                 os.path.join(getattr(sys, "_MEIPASS", ""), "assets", "app_icon.ico"),
                 os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "app_icon.ico")
             ]
+            valid_icon = None
             for ic in icon_candidates:
                 if ic and os.path.exists(ic):
-                    self.root.iconbitmap(ic)
+                    valid_icon = ic
                     break
+
+            if valid_icon:
+                # 1. Standard Tkinter window icon
+                self.root.iconbitmap(default=valid_icon)
+
+                # 2. Direct Win32 WM_SETICON to guarantee Windows Taskbar button updates immediately
+                if sys.platform == "win32":
+                    try:
+                        self.root.update_idletasks()
+                        hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+                        if not hwnd:
+                            hwnd = self.root.winfo_id()
+
+                        IMAGE_ICON = 1
+                        LR_LOADFROMFILE = 0x00000010
+                        WM_SETICON = 0x0080
+                        ICON_SMALL = 0
+                        ICON_BIG = 1
+
+                        h_icon_big = ctypes.windll.user32.LoadImageW(None, valid_icon, IMAGE_ICON, 48, 48, LR_LOADFROMFILE)
+                        h_icon_small = ctypes.windll.user32.LoadImageW(None, valid_icon, IMAGE_ICON, 16, 16, LR_LOADFROMFILE)
+
+                        if h_icon_big:
+                            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, h_icon_big)
+                        if h_icon_small:
+                            ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, h_icon_small)
+                    except Exception:
+                        pass
         except Exception:
             pass
 

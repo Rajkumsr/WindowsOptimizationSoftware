@@ -7,7 +7,7 @@ import sys
 import os
 import ctypes
 
-# Enable High-DPI Awareness for razor-sharp rendering
+# Enable High-DPI Awareness and register AppUserModelID for Windows Taskbar
 if sys.platform == "win32":
     try:
         ctypes.windll.shcore.SetProcessDpiAwareness(2)
@@ -16,6 +16,13 @@ if sys.platform == "win32":
             ctypes.windll.user32.SetProcessDPIAware()
         except Exception:
             pass
+
+    try:
+        # Decouples process from Python host and binds taskbar button directly to our app icon
+        app_id = "rajkumarpatil.apexwindowsoptimizer.pro.suite"
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except Exception:
+        pass
 
 def is_admin():
     try:
