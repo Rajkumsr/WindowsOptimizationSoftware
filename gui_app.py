@@ -1149,53 +1149,73 @@ class ApexOptimizerApp:
         t_top = tk.Frame(telem_card, bg=THEME["bg_card"])
         t_top.pack(fill=tk.X, pady=(0, 10))
 
-        # Battery Icon & Percentage
-        pct = telem["percent"]
-        pct_color = THEME["success"] if pct >= 60 else (THEME["warning"] if pct >= 25 else THEME["danger"])
+        is_limit_active = telem.get("limit_80_active", False)
+        has_battery = telem.get("has_battery", False)
+        mfg_name = telem.get("manufacturer", "System")
 
-        tk.Label(
-            t_top,
-            text=f"🔋 {pct}%",
-            font=(FONT_FAMILY, 20, "bold"),
-            fg=pct_color,
-            bg=THEME["bg_card"]
-        ).pack(side=tk.LEFT)
+        if has_battery:
+            pct = telem.get("percent", 0)
+            pct_color = THEME["success"] if pct >= 60 else (THEME["warning"] if pct >= 25 else THEME["danger"])
 
-        # Status badge pill on right
-        is_limit_active = telem["limit_80_active"]
-        if telem["ac_online"]:
-            if is_limit_active and pct >= 80:
-                ac_badge_text = "🛡️ AC BYPASS ACTIVE (BATTERY PROTECTED)"
-                ac_badge_fg = THEME["accent_cyan"]
-                ac_badge_bg = THEME["bg_card_alt"]
+            tk.Label(
+                t_top,
+                text=f"🔋 {pct}%",
+                font=(FONT_FAMILY, 20, "bold"),
+                fg=pct_color,
+                bg=THEME["bg_card"]
+            ).pack(side=tk.LEFT)
+
+            if telem.get("ac_online", False):
+                if is_limit_active and pct >= 80:
+                    ac_badge_text = "🛡️ AC BYPASS ACTIVE (BATTERY PROTECTED)"
+                    ac_badge_fg = THEME["accent_cyan"]
+                    ac_badge_bg = THEME["bg_card_alt"]
+                else:
+                    ac_badge_text = "⚡ AC ADAPTER PLUGGED IN"
+                    ac_badge_fg = THEME["success"]
+                    ac_badge_bg = THEME["success_bg"]
             else:
-                ac_badge_text = "⚡ AC ADAPTER PLUGGED IN"
-                ac_badge_fg = THEME["success"]
-                ac_badge_bg = THEME["success_bg"]
+                ac_badge_text = "🔋 DISCHARGING ON BATTERY"
+                ac_badge_fg = THEME["warning"]
+                ac_badge_bg = THEME["warning_bg"]
+
+            tk.Label(
+                t_top,
+                text=ac_badge_text,
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=ac_badge_fg,
+                bg=ac_badge_bg,
+                padx=10,
+                pady=4,
+                relief="flat"
+            ).pack(side=tk.RIGHT)
+
+            meter_bg = tk.Frame(telem_card, bg=THEME["bg_input"], height=14)
+            meter_bg.pack(fill=tk.X, pady=(0, 10))
+            meter_bg.pack_propagate(False)
+
+            fill_width_pct = max(0.02, min(1.0, pct / 100.0))
+            meter_fill = tk.Frame(meter_bg, bg=pct_color)
+            meter_fill.place(relx=0, rely=0, relwidth=fill_width_pct, relheight=1.0)
         else:
-            ac_badge_text = "🔋 DISCHARGING ON BATTERY"
-            ac_badge_fg = THEME["warning"]
-            ac_badge_bg = THEME["warning_bg"]
+            tk.Label(
+                t_top,
+                text="🖥️ Direct AC Wall Power",
+                font=(FONT_FAMILY, 16, "bold"),
+                fg=THEME["accent_cyan"],
+                bg=THEME["bg_card"]
+            ).pack(side=tk.LEFT)
 
-        tk.Label(
-            t_top,
-            text=ac_badge_text,
-            font=(FONT_FAMILY, 8, "bold"),
-            fg=ac_badge_fg,
-            bg=ac_badge_bg,
-            padx=10,
-            pady=4,
-            relief="flat"
-        ).pack(side=tk.RIGHT)
-
-        # Battery Bar Meter
-        meter_bg = tk.Frame(telem_card, bg=THEME["bg_input"], height=14)
-        meter_bg.pack(fill=tk.X, pady=(0, 10))
-        meter_bg.pack_propagate(False)
-
-        fill_width_pct = max(0.02, min(1.0, pct / 100.0))
-        meter_fill = tk.Frame(meter_bg, bg=pct_color)
-        meter_fill.place(relx=0, rely=0, relwidth=fill_width_pct, relheight=1.0)
+            tk.Label(
+                t_top,
+                text="🖥️ DESKTOP WORKSTATION",
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=THEME["accent_cyan"],
+                bg=THEME["bg_card_alt"],
+                padx=10,
+                pady=4,
+                relief="flat"
+            ).pack(side=tk.RIGHT)
 
         # Telemetry Details row
         details_frame = tk.Frame(telem_card, bg=THEME["bg_card"])
@@ -1203,185 +1223,387 @@ class ApexOptimizerApp:
 
         tk.Label(
             details_frame,
-            text=f"💻 {telem['model_name']}",
+            text=f"💻 {telem.get('model_name', 'Windows System')}",
             font=(FONT_FAMILY, 9),
             fg=THEME["text_muted"],
             bg=THEME["bg_card"]
         ).pack(side=tk.LEFT)
 
-        svc_status = "RUNNING" if telem["acc_service_running"] else ("INSTALLED" if telem["acc_service_installed"] else "INACTIVE")
-        svc_color = THEME["accent_cyan"] if telem["acc_service_running"] else THEME["text_dim"]
-        tk.Label(
-            details_frame,
-            text=f"⚙️ Acer ACCSvc: {svc_status}",
-            font=(FONT_FAMILY, 8, "bold"),
-            fg=svc_color,
-            bg=THEME["bg_card"]
-        ).pack(side=tk.RIGHT)
+        if telem.get("is_acer_hardware", False):
+            svc_status = "RUNNING" if telem.get("acc_service_running") else ("INSTALLED" if telem.get("acc_service_installed") else "INACTIVE")
+            svc_color = THEME["accent_cyan"] if telem.get("acc_service_running") else THEME["text_dim"]
+            tk.Label(
+                details_frame,
+                text=f"⚙️ Acer ACCSvc: {svc_status}",
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=svc_color,
+                bg=THEME["bg_card"]
+            ).pack(side=tk.RIGHT)
+        elif not has_battery:
+            tk.Label(
+                details_frame,
+                text="⚡ Hardware: Direct AC (Power Supply Unit)",
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=THEME["text_dim"],
+                bg=THEME["bg_card"]
+            ).pack(side=tk.RIGHT)
+        else:
+            tk.Label(
+                details_frame,
+                text=f"⚙️ Architecture: {mfg_name} Laptop",
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=THEME["warning"],
+                bg=THEME["bg_card"]
+            ).pack(side=tk.RIGHT)
 
         # ---------------------------------------------------------
-        # Card 2: Acer 80% Battery Charge Limit (AC Bypass) Hero Card
+        # Card 2: Battery Charge Limiting & AC Bypass Hero Card
         # ---------------------------------------------------------
         hero_card = ModernCard(scroll_content)
         hero_card.pack(fill=tk.X, pady=(0, 14))
 
-        # Optional In-Flight Action Success Alert Box
-        if hasattr(self, 'battery_feedback_msg') and self.battery_feedback_msg:
-            feedback_card = tk.Frame(hero_card, bg="#064E3B", padx=12, pady=8, highlightbackground="#10B981", highlightthickness=1)
-            feedback_card.pack(fill=tk.X, pady=(0, 10))
+        # CASE 1: Acer Supported Laptop
+        if telem.get("is_bypass_supported", False):
+            # Optional In-Flight Action Success Alert Box
+            if hasattr(self, 'battery_feedback_msg') and self.battery_feedback_msg:
+                feedback_card = tk.Frame(hero_card, bg="#064E3B", padx=12, pady=8, highlightbackground="#10B981", highlightthickness=1)
+                feedback_card.pack(fill=tk.X, pady=(0, 10))
+                tk.Label(
+                    feedback_card,
+                    text=self.battery_feedback_msg,
+                    font=(FONT_FAMILY, 9, "bold"),
+                    fg="#34D399",
+                    bg="#064E3B",
+                    anchor="w"
+                ).pack(fill=tk.X)
+
+            hero_top = tk.Frame(hero_card, bg=THEME["bg_card"])
+            hero_top.pack(fill=tk.X, pady=(0, 8))
+
             tk.Label(
-                feedback_card,
-                text=self.battery_feedback_msg,
-                font=(FONT_FAMILY, 9, "bold"),
-                fg="#34D399",
-                bg="#064E3B",
-                anchor="w"
-            ).pack(fill=tk.X)
+                hero_top,
+                text="Acer 80% Battery Charge Limit (AC Direct Bypass)",
+                font=(FONT_FAMILY, 11, "bold"),
+                fg=THEME["text_main"],
+                bg=THEME["bg_card"]
+            ).pack(side=tk.LEFT)
 
-        hero_top = tk.Frame(hero_card, bg=THEME["bg_card"])
-        hero_top.pack(fill=tk.X, pady=(0, 8))
+            if is_limit_active:
+                badge_text = "✅ BYPASS ENGAGED (80% LIMIT)"
+                badge_fg = THEME["success"]
+                badge_bg = THEME["success_bg"]
+            else:
+                badge_text = "⚡ 100% FULL CHARGE"
+                badge_fg = THEME["text_muted"]
+                badge_bg = THEME["bg_card_alt"]
 
-        tk.Label(
-            hero_top,
-            text="Acer 80% Battery Charge Limit (AC Direct Bypass)",
-            font=(FONT_FAMILY, 11, "bold"),
-            fg=THEME["text_main"],
-            bg=THEME["bg_card"]
-        ).pack(side=tk.LEFT)
-
-        if is_limit_active:
-            badge_text = "✅ BYPASS ENGAGED (80% LIMIT)"
-            badge_fg = THEME["success"]
-            badge_bg = THEME["success_bg"]
-        else:
-            badge_text = "⚡ 100% FULL CHARGE"
-            badge_fg = THEME["text_muted"]
-            badge_bg = THEME["bg_card_alt"]
-
-        tk.Label(
-            hero_top,
-            text=badge_text,
-            font=(FONT_FAMILY, 8, "bold"),
-            fg=badge_fg,
-            bg=badge_bg,
-            padx=10,
-            pady=3,
-            relief="flat"
-        ).pack(side=tk.RIGHT)
-
-        hero_desc = (
-            "Locks maximum battery charge at 80% and routes charger current directly to system components.\n"
-            "This bypasses battery charging cycles, stops continuous high-voltage saturation stress, and eliminates\n"
-            "battery swelling and thermal degradation when working or gaming while plugged into the charger."
-        )
-        tk.Label(
-            hero_card,
-            text=hero_desc,
-            font=(FONT_FAMILY, 8),
-            fg=THEME["text_muted"],
-            bg=THEME["bg_card"],
-            justify="left",
-            wraplength=640
-        ).pack(anchor="w", pady=(0, 12))
-
-        # Permanent Operational State Banner Box
-        status_box = tk.Frame(
-            hero_card,
-            bg="#064E3B" if is_limit_active else THEME["bg_input"],
-            padx=14,
-            pady=10,
-            highlightbackground="#10B981" if is_limit_active else THEME["border"],
-            highlightthickness=1
-        )
-        status_box.pack(fill=tk.X, pady=(0, 14))
-
-        if is_limit_active:
             tk.Label(
-                status_box,
-                text="✅ BATTERY BYPASS SET WITH SUCCESS — HARDWARE 80% LIMIT ACTIVE",
-                font=(FONT_FAMILY, 9, "bold"),
-                fg="#34D399",
-                bg="#064E3B",
-                anchor="w"
-            ).pack(fill=tk.X)
+                hero_top,
+                text=badge_text,
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=badge_fg,
+                bg=badge_bg,
+                padx=10,
+                pady=3,
+                relief="flat"
+            ).pack(side=tk.RIGHT)
+
+            hero_desc = (
+                "Locks maximum battery charge at 80% and routes charger current directly to system components.\n"
+                "This bypasses battery charging cycles, stops continuous high-voltage saturation stress, and eliminates\n"
+                "battery swelling and thermal degradation when working or gaming while plugged into the charger."
+            )
             tk.Label(
-                status_box,
-                text="• Hardware status: AC Power Bypass is actively engaged on your system.\n• The battery stops charging at 80% to protect cells from high-voltage wear and swelling.\n• Laptop draws electricity directly from the charger without cycling or heating the battery cells.",
+                hero_card,
+                text=hero_desc,
                 font=(FONT_FAMILY, 8),
-                fg="#A7F3D0",
-                bg="#064E3B",
-                anchor="w",
-                wraplength=640,
-                justify="left"
-            ).pack(fill=tk.X, pady=(4, 0))
-        else:
+                fg=THEME["text_muted"],
+                bg=THEME["bg_card"],
+                justify="left",
+                wraplength=640
+            ).pack(anchor="w", pady=(0, 12))
+
+            # Permanent Operational State Banner Box
+            status_box = tk.Frame(
+                hero_card,
+                bg="#064E3B" if is_limit_active else THEME["bg_input"],
+                padx=14,
+                pady=10,
+                highlightbackground="#10B981" if is_limit_active else THEME["border"],
+                highlightthickness=1
+            )
+            status_box.pack(fill=tk.X, pady=(0, 14))
+
+            if is_limit_active:
+                tk.Label(
+                    status_box,
+                    text="✅ BATTERY BYPASS SET WITH SUCCESS — HARDWARE 80% LIMIT ACTIVE",
+                    font=(FONT_FAMILY, 9, "bold"),
+                    fg="#34D399",
+                    bg="#064E3B",
+                    anchor="w"
+                ).pack(fill=tk.X)
+                tk.Label(
+                    status_box,
+                    text="• Hardware status: AC Power Bypass is actively engaged on your system.\n• The battery stops charging at 80% to protect cells from high-voltage wear and swelling.\n• Laptop draws electricity directly from the charger without cycling or heating the battery cells.",
+                    font=(FONT_FAMILY, 8),
+                    fg="#A7F3D0",
+                    bg="#064E3B",
+                    anchor="w",
+                    wraplength=640,
+                    justify="left"
+                ).pack(fill=tk.X, pady=(4, 0))
+            else:
+                tk.Label(
+                    status_box,
+                    text="⚡ STANDARD CHARGING PROFILE — 100% MAXIMUM CHARGE",
+                    font=(FONT_FAMILY, 9, "bold"),
+                    fg=THEME["text_main"],
+                    bg=THEME["bg_input"],
+                    anchor="w"
+                ).pack(fill=tk.X)
+                tk.Label(
+                    status_box,
+                    text="• Standard charging mode: Battery will charge up to 100% capacity.\n• Best suited when you need maximum portable battery run-time away from wall power.",
+                    font=(FONT_FAMILY, 8),
+                    fg=THEME["text_muted"],
+                    bg=THEME["bg_input"],
+                    anchor="w",
+                    wraplength=640,
+                    justify="left"
+                ).pack(fill=tk.X, pady=(4, 0))
+
+            hero_btn_row = tk.Frame(hero_card, bg=THEME["bg_card"])
+            hero_btn_row.pack(fill=tk.X)
+
+            if is_limit_active:
+                toggle_btn = tk.Button(
+                    hero_btn_row,
+                    text="DISABLE 80% LIMIT (ALLOW 100% CHARGE)",
+                    font=(FONT_FAMILY, 9, "bold"),
+                    fg=THEME["text_muted"],
+                    bg=THEME["bg_card_alt"],
+                    activebackground=THEME["border"],
+                    activeforeground=THEME["text_main"],
+                    relief="flat",
+                    cursor="hand2",
+                    padx=16,
+                    pady=7,
+                    command=lambda: self.action_toggle_acer_battery_limit(False)
+                )
+                toggle_btn.pack(side=tk.LEFT)
+            else:
+                toggle_btn = tk.Button(
+                    hero_btn_row,
+                    text="ENABLE 80% CHARGE LIMIT (AC BYPASS)",
+                    font=(FONT_FAMILY, 9, "bold"),
+                    fg="#FFFFFF",
+                    bg=THEME["primary"],
+                    activebackground=THEME["primary_hover"],
+                    relief="flat",
+                    cursor="hand2",
+                    padx=16,
+                    pady=7,
+                    command=lambda: self.action_toggle_acer_battery_limit(True)
+                )
+                toggle_btn.pack(side=tk.LEFT)
+
+            tk.Button(
+                hero_btn_row,
+                text="🔄 Refresh Status",
+                font=(FONT_FAMILY, 8),
+                fg=THEME["text_muted"],
+                bg=THEME["bg_card"],
+                activebackground=THEME["bg_card_alt"],
+                relief="flat",
+                cursor="hand2",
+                padx=10,
+                pady=7,
+                command=lambda: self.switch_tab("battery")
+            ).pack(side=tk.RIGHT)
+
+        # CASE 2: Desktop PC (No Internal Battery Present)
+        elif not has_battery:
+            hero_top = tk.Frame(hero_card, bg=THEME["bg_card"])
+            hero_top.pack(fill=tk.X, pady=(0, 8))
+
             tk.Label(
-                status_box,
-                text="⚡ STANDARD CHARGING PROFILE — 100% MAXIMUM CHARGE",
+                hero_top,
+                text="Battery Charge Limit & AC Bypass",
+                font=(FONT_FAMILY, 11, "bold"),
+                fg=THEME["text_main"],
+                bg=THEME["bg_card"]
+            ).pack(side=tk.LEFT)
+
+            tk.Label(
+                hero_top,
+                text="🖥️ DESKTOP WORKSTATION",
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=THEME["accent_cyan"],
+                bg=THEME["bg_card_alt"],
+                padx=10,
+                pady=3,
+                relief="flat"
+            ).pack(side=tk.RIGHT)
+
+            desktop_box = tk.Frame(
+                hero_card,
+                bg=THEME["bg_input"],
+                padx=14,
+                pady=12,
+                highlightbackground=THEME["border"],
+                highlightthickness=1
+            )
+            desktop_box.pack(fill=tk.X, pady=(6, 12))
+
+            tk.Label(
+                desktop_box,
+                text="🖥️ DESKTOP SYSTEM DETECTED — BATTERY CHARGE LIMIT NOT APPLICABLE",
                 font=(FONT_FAMILY, 9, "bold"),
                 fg=THEME["text_main"],
                 bg=THEME["bg_input"],
                 anchor="w"
             ).pack(fill=tk.X)
+
             tk.Label(
-                status_box,
-                text="• Standard charging mode: Battery will charge up to 100% capacity.\n• Best suited when you need maximum portable battery run-time away from wall power.",
+                desktop_box,
+                text=(
+                    "• Your computer is running on direct wall AC power supplied through the Power Supply Unit (PSU).\n"
+                    "• Because there is no internal lithium-ion battery pack, charge limiting and battery bypass are not needed.\n"
+                    "• Wall current already routes directly to the motherboard with zero cell wear."
+                ),
                 font=(FONT_FAMILY, 8),
                 fg=THEME["text_muted"],
                 bg=THEME["bg_input"],
                 anchor="w",
                 wraplength=640,
                 justify="left"
-            ).pack(fill=tk.X, pady=(4, 0))
+            ).pack(fill=tk.X, pady=(6, 0))
 
-        hero_btn_row = tk.Frame(hero_card, bg=THEME["bg_card"])
-        hero_btn_row.pack(fill=tk.X)
+            hero_btn_row = tk.Frame(hero_card, bg=THEME["bg_card"])
+            hero_btn_row.pack(fill=tk.X)
 
-        if is_limit_active:
-            toggle_btn = tk.Button(
+            tk.Button(
                 hero_btn_row,
-                text="DISABLE 80% LIMIT (ALLOW 100% CHARGE)",
-                font=(FONT_FAMILY, 9, "bold"),
+                text="🔄 Refresh Hardware Detection",
+                font=(FONT_FAMILY, 8),
                 fg=THEME["text_muted"],
+                bg=THEME["bg_card"],
+                activebackground=THEME["bg_card_alt"],
+                relief="flat",
+                cursor="hand2",
+                padx=10,
+                pady=7,
+                command=lambda: self.switch_tab("battery")
+            ).pack(side=tk.RIGHT)
+
+        # CASE 3: Non-Acer Laptop (Lenovo, Dell, HP, ASUS, MSI, Samsung, etc.)
+        else:
+            hero_top = tk.Frame(hero_card, bg=THEME["bg_card"])
+            hero_top.pack(fill=tk.X, pady=(0, 8))
+
+            tk.Label(
+                hero_top,
+                text="Hardware 80% Battery Charge Limit (AC Direct Bypass)",
+                font=(FONT_FAMILY, 11, "bold"),
+                fg=THEME["text_main"],
+                bg=THEME["bg_card"]
+            ).pack(side=tk.LEFT)
+
+            tk.Label(
+                hero_top,
+                text=f"⚠️ {mfg_name.upper()} DETECTED",
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=THEME["warning"],
+                bg=THEME["warning_bg"],
+                padx=10,
+                pady=3,
+                relief="flat"
+            ).pack(side=tk.RIGHT)
+
+            oem_box = tk.Frame(
+                hero_card,
+                bg="#231E12",
+                padx=14,
+                pady=12,
+                highlightbackground="#B45309",
+                highlightthickness=1
+            )
+            oem_box.pack(fill=tk.X, pady=(6, 12))
+
+            tk.Label(
+                oem_box,
+                text=f"⚠️ OEM HARDWARE NOTICE: {mfg_name.upper()} MOTHERBOARD ARCHITECTURE",
+                font=(FONT_FAMILY, 9, "bold"),
+                fg="#FBBF24",
+                bg="#231E12",
+                anchor="w"
+            ).pack(fill=tk.X)
+
+            oem_notice_text = (
+                f"• Direct hardware bypass and 80% charge threshold ('root\\wmi:BatteryControl') are hardcoded in Acer Embedded Controller (EC) firmware.\n"
+                f"• Microsoft Windows does not provide a universal battery limit API; each laptop manufacturer uses their own proprietary firmware.\n\n"
+                f"Official charge limit methods for your {mfg_name} laptop:\n"
+                f"  🔹 Lenovo: Lenovo Vantage → Device → Power → Enable 'Battery Conservation Mode' (80% / 60% limit)\n"
+                f"  🔹 ASUS: MyASUS → Customization → Select 'Battery Health Charging' (80% Lifespan Mode)\n"
+                f"  🔹 Dell: Dell Power Manager / Command | Power → Battery Settings → Select 'Primarily AC Use' (80% limit)\n"
+                f"  🔹 HP: HP BIOS/UEFI → Advanced → Power Management Options → Enable 'Battery Care Function' (80% Max)\n"
+                f"  🔹 MSI: MSI Center / Dragon Center → Battery Master → Select 'Balanced Mode' (80% limit)\n"
+                f"  🔹 Samsung: Samsung Settings → Battery → Toggle 'Protect Battery' (85% limit)\n\n"
+                f"✅ Universal features on this page (Official Windows Battery Report and Fast Startup Standby Fix) are 100% compatible with your {mfg_name} device!"
+            )
+
+            tk.Label(
+                oem_box,
+                text=oem_notice_text,
+                font=(FONT_FAMILY, 8),
+                fg="#FDE68A",
+                bg="#231E12",
+                anchor="w",
+                wraplength=640,
+                justify="left"
+            ).pack(fill=tk.X, pady=(6, 0))
+
+            hero_btn_row = tk.Frame(hero_card, bg=THEME["bg_card"])
+            hero_btn_row.pack(fill=tk.X)
+
+            def show_oem_guide():
+                messagebox.showinfo(
+                    f"{mfg_name} Battery Optimization Guide",
+                    f"Hardware Detection: {telem.get('model_name')}\n\n"
+                    f"Direct WMI battery bypassing is proprietary to Acer hardware.\n\n"
+                    f"For your {mfg_name} laptop, please activate battery protection using your native manufacturer utility (such as Lenovo Vantage, MyASUS, Dell Power Manager, or HP BIOS).\n\n"
+                    f"You can still generate the Official Windows Battery Report and toggle the Fast Startup standby drain fix below!"
+                )
+
+            tk.Button(
+                hero_btn_row,
+                text=f"ℹ️ HOW TO LIMIT CHARGE ON {mfg_name.upper()} LAPTOPS",
+                font=(FONT_FAMILY, 9, "bold"),
+                fg=THEME["warning"],
                 bg=THEME["bg_card_alt"],
                 activebackground=THEME["border"],
                 activeforeground=THEME["text_main"],
                 relief="flat",
                 cursor="hand2",
-                padx=16,
+                padx=14,
                 pady=7,
-                command=lambda: self.action_toggle_acer_battery_limit(False)
-            )
-            toggle_btn.pack(side=tk.LEFT)
-        else:
-            toggle_btn = tk.Button(
+                command=show_oem_guide
+            ).pack(side=tk.LEFT)
+
+            tk.Button(
                 hero_btn_row,
-                text="ENABLE 80% CHARGE LIMIT (AC BYPASS)",
-                font=(FONT_FAMILY, 9, "bold"),
-                fg="#FFFFFF",
-                bg=THEME["primary"],
-                activebackground=THEME["primary_hover"],
+                text="🔄 Refresh Hardware Status",
+                font=(FONT_FAMILY, 8),
+                fg=THEME["text_muted"],
+                bg=THEME["bg_card"],
+                activebackground=THEME["bg_card_alt"],
                 relief="flat",
                 cursor="hand2",
-                padx=16,
+                padx=10,
                 pady=7,
-                command=lambda: self.action_toggle_acer_battery_limit(True)
-            )
-            toggle_btn.pack(side=tk.LEFT)
-
-        tk.Button(
-            hero_btn_row,
-            text="🔄 Refresh Status",
-            font=(FONT_FAMILY, 8),
-            fg=THEME["text_muted"],
-            bg=THEME["bg_card"],
-            activebackground=THEME["bg_card_alt"],
-            relief="flat",
-            cursor="hand2",
-            padx=10,
-            pady=7,
-            command=lambda: self.switch_tab("battery")
-        ).pack(side=tk.RIGHT)
+                command=lambda: self.switch_tab("battery")
+            ).pack(side=tk.RIGHT)
 
         # ---------------------------------------------------------
         # Card 3: Windows Battery Diagnostic & Wear Report

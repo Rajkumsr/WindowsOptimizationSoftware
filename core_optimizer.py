@@ -1104,7 +1104,11 @@ class OptimizationEngine:
             "ac_online": False,
             "is_charging": False,
             "status_text": "Desktop / AC Only",
-            "model_name": "Acer System",
+            "manufacturer": "Generic",
+            "product_name": "PC",
+            "model_name": "System PC",
+            "is_acer_hardware": False,
+            "is_bypass_supported": False,
             "acc_service_installed": False,
             "acc_service_running": False,
             "limit_80_active": False,
@@ -1117,7 +1121,14 @@ class OptimizationEngine:
             mfg, _ = winreg.QueryValueEx(key, "SystemManufacturer")
             prod, _ = winreg.QueryValueEx(key, "SystemProductName")
             winreg.CloseKey(key)
-            status["model_name"] = f"{mfg.strip()} {prod.strip()}"
+            mfg_clean = mfg.strip()
+            prod_clean = prod.strip()
+            status["manufacturer"] = mfg_clean
+            status["product_name"] = prod_clean
+            status["model_name"] = f"{mfg_clean} {prod_clean}"
+            mfg_lower = mfg_clean.lower()
+            if any(k in mfg_lower for k in ["acer", "predator", "nitro", "gateway", "packard bell"]):
+                status["is_acer_hardware"] = True
         except Exception:
             pass
 
@@ -1152,6 +1163,9 @@ class OptimizationEngine:
                         status["status_text"] = f"🔋 On Battery Power ({status['percent']}%)"
         except Exception:
             pass
+
+        # Calculate whether hardware bypass is supported on this machine
+        status["is_bypass_supported"] = bool(status["has_battery"] and status["is_acer_hardware"])
 
         # Query 80% charge limit state
         status["limit_80_active"] = self.get_acer_charge_limit_state()
@@ -1192,6 +1206,14 @@ class OptimizationEngine:
         """
         target_val = 1 if enable else 0
         state_str = "80% AC Bypass Limit" if enable else "100% Full Charge Mode"
+
+        # Hardware compatibility check
+        telemetry = self.get_battery_telemetry()
+        if not telemetry["is_acer_hardware"]:
+            msg = f"Battery charge limiting via BatteryControl WMI is only supported on Acer hardware. Your system is: {telemetry['model_name']}."
+            self.log(msg, "WARNING")
+            return False, msg
+
         self.log(f"Setting battery hardware charging profile to: {state_str}...", "INFO")
 
         # If running un-elevated, invoke elevated UAC PowerShell helper directly
