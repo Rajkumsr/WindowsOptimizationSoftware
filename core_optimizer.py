@@ -16,6 +16,9 @@ import threading
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple, Any
 
+# Windows creation flag to completely suppress console window spawning
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
 class OptimizationEngine:
     def __init__(self, log_callback: Optional[Callable[[str, str], None]] = None):
         """
@@ -27,6 +30,10 @@ class OptimizationEngine:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.session_log_path = os.path.join(self.log_dir, f"ApexOptimizer_{timestamp}.log")
         self.is_cancelling = False
+        
+        # In-memory hardware cache to prevent repeated subprocess execution during live telemetry loops
+        self._cached_chassis_type = None
+        self._cached_is_laptop = None
 
     def log(self, message: str, level: str = "INFO"):
         formatted_time = datetime.now().strftime("%H:%M:%S")
@@ -115,20 +122,34 @@ class OptimizationEngine:
         except Exception:
             pass
 
-        # Query Chassis Type via PowerShell CIM
-        try:
-            cmd = "Get-CimInstance -ClassName Win32_SystemEnclosure | Select-Object -ExpandProperty ChassisTypes"
-            res = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=5)
-            types = [t.strip() for t in res.stdout.strip().splitlines() if t.strip().isdigit()]
-            laptop_chassis = {"8", "9", "10", "11", "12", "14", "18", "21", "31", "32"}
-            if any(t in laptop_chassis for t in types):
-                info["chassis_type"] = "Laptop / Portable"
-                info["is_laptop"] = True
-            else:
-                info["chassis_type"] = "Desktop PC"
-                info["is_laptop"] = False
-        except Exception:
-            pass
+        # Query Chassis Type once and cache it (avoids spawning processes in periodic telemetry loop)
+        if self._cached_chassis_type is not None:
+            info["chassis_type"] = self._cached_chassis_type
+            info["is_laptop"] = self._cached_is_laptop
+        else:
+            try:
+                cmd = "Get-CimInstance -ClassName Win32_SystemEnclosure | Select-Object -ExpandProperty ChassisTypes"
+                res = subprocess.run(
+                    ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", cmd],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    creationflags=CREATE_NO_WINDOW
+                )
+                types = [t.strip() for t in res.stdout.strip().splitlines() if t.strip().isdigit()]
+                laptop_chassis = {"8", "9", "10", "11", "12", "14", "18", "21", "31", "32"}
+                if any(t in laptop_chassis for t in types):
+                    self._cached_chassis_type = "Laptop / Portable"
+                    self._cached_is_laptop = True
+                else:
+                    self._cached_chassis_type = "Desktop PC"
+                    self._cached_is_laptop = False
+            except Exception:
+                self._cached_chassis_type = "Desktop PC"
+                self._cached_is_laptop = False
+
+            info["chassis_type"] = self._cached_chassis_type
+            info["is_laptop"] = self._cached_is_laptop
 
         return info
 
@@ -142,7 +163,8 @@ class OptimizationEngine:
                 shell=True,
                 capture_output=True,
                 text=True,
-                timeout=120
+                timeout=120,
+                creationflags=CREATE_NO_WINDOW
             )
             out = result.stdout.strip()
             err = result.stderr.strip()
@@ -159,7 +181,8 @@ class OptimizationEngine:
                 ["powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", script],
                 capture_output=True,
                 text=True,
-                timeout=180
+                timeout=180,
+                creationflags=CREATE_NO_WINDOW
             )
             full = f"{result.stdout.strip()}\n{result.stderr.strip()}".strip()
             return result.returncode, full
@@ -1076,7 +1099,7 @@ class OptimizationEngine:
     def restart_explorer(self) -> bool:
         self.log("Restarting Windows Explorer shell...", "INFO")
         self.run_cmd("taskkill /f /im explorer.exe")
-        subprocess.Popen(["explorer.exe"])
+        subprocess.Popen(["explorer.exe"], creationflags=CREATE_NO_WINDOW)
         self.log("Windows Explorer restarted.", "SUCCESS")
         return True
 

@@ -25,7 +25,10 @@ def is_admin():
 
 def main():
     # Automatically request administrative elevation so HKLM registry, WMI, and services have full permissions
-    if sys.platform == "win32" and not is_admin() and "--no-elevate" not in sys.argv:
+    if getattr(sys, "frozen", False):
+        # Standalone executable is already manifested with --uac-admin elevation
+        pass
+    elif sys.platform == "win32" and not is_admin() and "--no-elevate" not in sys.argv:
         try:
             script = os.path.abspath(__file__)
             params = " ".join([f'"{arg}"' for arg in sys.argv[1:]])
