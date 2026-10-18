@@ -71,16 +71,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **Ultimate Performance Power Scheme**: Activates Windows' hidden latency-free power plan.
 * **HPET Reset**: Removes explicit timer overrides to prevent micro-stuttering.
 
-### 10. 🔋 Battery Health & AC Power Bypass (Laptop & Acer Hardware)
-* **Real-time Live Battery Telemetry**: Zero-overhead native kernel gauge showing exact percentage, charging status, and AC connection state.
-* **Acer 80% Battery Charge Limit (AC Direct Bypass)**:
-  * Locks maximum charge level to 80% and routes charger power directly to the motherboard/components (bypassing battery cells).
-  * Prevents high-voltage saturation, thermal degradation, and battery swelling during prolonged gaming or desktop charging.
-  * Dual-layer actuation: directly invokes `root\wmi:BatteryControl.SetBatteryHealthControl` and synchronizes with Acer's background service (`ACCSvc`).
-* **Official Windows Battery Health Report**: 1-click diagnostic generator (`powercfg /batteryreport`) showing design capacity, full charge capacity, wear level %, and cycle history.
-* **Prevent Standby & Shutdown Battery Drain**: One-click toggle to disable Windows Fast Startup (`HiberbootEnabled`), eliminating phantom 3-5% overnight battery discharge.
-
-### 11. 🧹 Deep Disk & Cache Cleaner (Real BeardSweeper)
+### 10. 🧹 Deep Disk & Cache Cleaner (Real BeardSweeper)
 * Calculates exact reclaimable storage space before cleaning:
   * Windows System Temp & User Profile Temp
   * Windows Update Download Cache (`SoftwareDistribution\Download`)
@@ -89,10 +80,10 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
   * Crash Dumps & Windows Error Reports
   * Explorer Thumbnail Cache
 
-### 12. 📦 Software Updater (WinGet)
+### 11. 📦 Software Updater (WinGet)
 * Integrates directly with Windows Package Manager to inspect and update all installed applications silently.
 
-### 13. 📝 Live Activity Console
+### 12. 📝 Live Activity Console
 * Color-coded real-time execution log with copy-to-clipboard and export capabilities.
 
 ---
