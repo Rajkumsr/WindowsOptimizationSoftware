@@ -1,0 +1,37 @@
+# UTF-8
+#
+# For more details about fixed file info:
+# https://learn.microsoft.com/en-us/windows/win32/menurc/versioninfo-resource
+
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=(2, 0, 0, 0),
+    prodvers=(2, 0, 0, 0),
+    mask=0x3f,
+    flags=0x0,
+    OS=0x40004,
+    fileType=0x1,
+    subtype=0x0,
+    date=(0, 0)
+  ),
+  kids=[
+    StringFileInfo(
+      [
+        StringTable(
+          '040904B0',
+          [
+            StringStruct('CompanyName', 'Rajkumar Patil'),
+            StringStruct('FileDescription', 'Apex Windows Optimizer Pro Suite v2.0'),
+            StringStruct('FileVersion', '2.0.0.0'),
+            StringStruct('InternalName', 'ApexWindowsOptimizer'),
+            StringStruct('LegalCopyright', 'Copyright (C) 2026 Rajkumar Patil. All rights reserved.'),
+            StringStruct('OriginalFilename', 'ApexWindowsOptimizer.exe'),
+            StringStruct('ProductName', 'Apex Windows Optimizer Pro'),
+            StringStruct('ProductVersion', '2.0.0.0')
+          ]
+        )
+      ]
+    ),
+    VarFileInfo([VarStruct('Translation', [1033, 1200])])
+  ]
+)

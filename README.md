@@ -103,6 +103,15 @@ python gui_app.py
 ```
 *(No external pip dependencies required — uses Python's standard library `tkinter`, `winreg`, and `ctypes`)*
 
+### Method 3: Compile Standalone Single-File Executable (.exe)
+Compile the entire suite into a single portable binary that runs on any Windows PC with zero Python installation required:
+```powershell
+# Double-click Build_Executable.bat, or run:
+python build_exe.py
+```
+The compiled binary with embedded high-resolution icon and auto-UAC elevation manifest is saved to:
+`dist\ApexWindowsOptimizer.exe`
+
 ---
 
 ## 👨‍💻 Developer & Author

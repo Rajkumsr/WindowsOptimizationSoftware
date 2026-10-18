@@ -190,6 +190,19 @@ class ApexOptimizerApp:
         self.root.minsize(1020, 680)
         self.root.configure(bg=THEME["bg_app"])
 
+        # Set Window and Taskbar Icon
+        try:
+            icon_candidates = [
+                os.path.join(getattr(sys, "_MEIPASS", ""), "assets", "app_icon.ico"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "app_icon.ico")
+            ]
+            for ic in icon_candidates:
+                if ic and os.path.exists(ic):
+                    self.root.iconbitmap(ic)
+                    break
+        except Exception:
+            pass
+
         # Core optimization backend engine
         self.engine = core_optimizer.OptimizationEngine(log_callback=self.on_log_message)
         self.hw_info = self.engine.get_hardware_info()
