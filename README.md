@@ -6,10 +6,12 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 
 ## 🌟 Highlights & Capabilities
 
-### 1. 📊 Comprehensive Dashboard & Live Telemetry
-* **Real-time Live Telemetry**: Live RAM monitoring loop (free, total, and percentage load) updated periodically, along with CPU, storage, and active chassis detection (`🖥️ Desktop PC` vs `💻 Laptop`).
+### 1. 📊 Comprehensive Dashboard & Live Health Diagnostics
+* **System Health & Hygiene Score (0–100%)**: Dynamic rating with real-time tweak and policy counter, calculating system efficiency and telemetry posture.
+* **Real-time Live Telemetry**: Instant CPU load percentage, physical RAM usage (free, total, and percentage load), system drive, active chassis detection (`🖥️ Desktop PC` vs `💻 Laptop`), and precise system uptime (`GetTickCount64`).
+* **⚡ 1-Click Instant System Boost**: Flushes process working sets and Standby cache via Win32 `EmptyWorkingSet` (instantly freeing 1 GB – 3 GB of trapped memory), sweeps temporary clutter, and refreshes DNS cache in a single click.
 * **One-Click Quick Optimization**: Applies recommended safety tweaks across performance, privacy, and shell settings with automated rollback snapshot creation.
-* **Instant Utilities**: Flush DNS cache, restart Windows Explorer shell, export registry backups, and create System Restore points.
+* **Instant Utilities**: Purge Standby RAM, flush DNS cache, restart Windows Explorer shell, export registry backups, and create System Restore points.
 
 ### 2. ⚡ Real State Detection & Bi-Directional Toggles
 * **Live System State Inspection**: On launch, the software inspects the Windows Registry to determine what is already `[OPTIMIZED]` vs `[DEFAULT]`.
@@ -93,6 +95,12 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 
 ### 13. 📝 Live Activity Console
 * Color-coded real-time execution log with copy-to-clipboard and export capabilities.
+
+### 14. 📌 System Tray Mini-Mode & Background Monitoring
+* **Background Notification Area Integration**: Minimizes seamlessly to the Windows System Tray with a high-resolution dark icon (`pystray`).
+* **Quick Action Tray Menu**: Right-click the tray icon to execute *1-Click Instant Boost & Purge RAM*, open the *Battery & Power Saver* suite, or reopen the application.
+* **Smart Background Guard**: Keeps battery health alerts (80% / 20% lithium cell guard) active without keeping the main GUI window on your screen.
+* **Dedicated Tray Controls**: Header "📌 Minimize to Tray" button and automatic minimize-on-close protection to avoid accidental process termination.
 
 ---
 

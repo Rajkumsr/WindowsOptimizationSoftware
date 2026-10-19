@@ -189,6 +189,81 @@ class ToggleSwitch(tk.Frame):
         self.render()
 
 
+class ApexTrayManager:
+    """Manages the Windows Notification Area (System Tray) icon and quick action menu."""
+    def __init__(self, app):
+        self.app = app
+        self.icon = None
+        self._running = False
+        self.setup_tray()
+
+    def setup_tray(self):
+        try:
+            import pystray
+            from PIL import Image
+
+            icon_candidates = [
+                os.path.join(getattr(sys, "_MEIPASS", ""), "assets", "app_icon.ico"),
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "app_icon.ico")
+            ]
+            valid_icon = None
+            for ic in icon_candidates:
+                if ic and os.path.exists(ic):
+                    valid_icon = ic
+                    break
+
+            if valid_icon:
+                img = Image.open(valid_icon)
+            else:
+                img = Image.new("RGBA", (64, 64), color=(99, 102, 241, 255))
+
+            menu = pystray.Menu(
+                pystray.MenuItem("🟢 Open Apex Optimizer", self.on_open_app, default=True),
+                pystray.MenuItem("⚡ 1-Click Boost & Purge RAM", self.on_quick_boost),
+                pystray.MenuItem("🔋 Battery & Power Saver", self.on_open_battery),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem("❌ Exit Optimizer", self.on_exit)
+            )
+
+            self.icon = pystray.Icon("ApexWindowsOptimizer", img, "Apex Windows Optimizer Pro", menu)
+            self.icon.run_detached()
+            self._running = True
+        except Exception:
+            self._running = False
+
+    def is_active(self) -> bool:
+        return self._running and (self.icon is not None)
+
+    def notify(self, message: str, title: str = "Apex Windows Optimizer"):
+        if self.icon and self._running:
+            try:
+                self.icon.notify(message, title)
+            except Exception:
+                pass
+
+    def on_open_app(self, icon=None, item=None):
+        self.app.root.after(0, self.app.restore_from_tray)
+
+    def on_quick_boost(self, icon=None, item=None):
+        self.app.root.after(0, self.app.action_quick_boost)
+
+    def on_open_battery(self, icon=None, item=None):
+        self.app.root.after(0, lambda: self.app.switch_tab("battery"))
+        self.app.root.after(20, self.app.restore_from_tray)
+
+    def on_exit(self, icon=None, item=None):
+        self.stop()
+        self.app.root.after(0, self.app.quit_completely)
+
+    def stop(self):
+        if self.icon and self._running:
+            self._running = False
+            try:
+                self.icon.stop()
+            except Exception:
+                pass
+
+
 class ApexOptimizerApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -258,6 +333,10 @@ class ApexOptimizerApp:
         self.multi_user_deploy_var = tk.BooleanVar(value=True)
         self.battery_alarm_enabled = False
         self._last_alarm_notified = None
+
+        # System Tray & Window Lifecycle Management
+        self.tray_manager = ApexTrayManager(self)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_window_close)
 
         self.setup_styles()
         self.build_header()
@@ -361,6 +440,22 @@ class ApexOptimizerApp:
             elevate_btn.pack(side=tk.LEFT, padx=(0, 12))
 
         # Quick Action Buttons
+        tray_btn = tk.Button(
+            tools_frame,
+            text="📌 Minimize to Tray",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["accent_cyan"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_alt"],
+            activeforeground=THEME["text_main"],
+            relief="flat",
+            cursor="hand2",
+            padx=9,
+            pady=3,
+            command=lambda: self.minimize_to_tray(show_toast=True)
+        )
+        tray_btn.pack(side=tk.LEFT, padx=(0, 6))
+
         dns_btn = tk.Button(
             tools_frame,
             text="🌐 Flush DNS",
@@ -599,9 +694,19 @@ class ApexOptimizerApp:
     # -------------------------------------------------------------
     def schedule_live_telemetry(self):
         def _update():
-            if self.active_tab == "dashboard" and hasattr(self, 'ram_val_lbl') and self.ram_val_lbl.winfo_exists():
+            if self.active_tab == "dashboard":
                 hw = self.engine.get_hardware_info()
-                self.ram_val_lbl.config(text=f"{hw['free_ram']} Free of {hw['total_ram']} ({hw['ram_percent']} Used)")
+                if hasattr(self, 'ram_val_lbl') and self.ram_val_lbl.winfo_exists():
+                    self.ram_val_lbl.config(text=f"{hw['free_ram']} Free of {hw['total_ram']}")
+                if hasattr(self, 'dash_cpu_lbl') and self.dash_cpu_lbl.winfo_exists():
+                    self.dash_cpu_lbl.config(text=f"{hw.get('cpu_percent', 0):.0f}% Load")
+                if hasattr(self, 'dash_uptime_lbl') and self.dash_uptime_lbl.winfo_exists():
+                    self.dash_uptime_lbl.config(text=f"Uptime: {hw.get('uptime', 'Active')}")
+                if hasattr(self, 'dash_score_lbl') and self.dash_score_lbl.winfo_exists():
+                    score_info = self.engine.calculate_health_score(self.live_states)
+                    self.dash_score_lbl.config(text=f"{score_info['score']}%", fg=score_info["color"])
+                    if hasattr(self, 'dash_rating_lbl') and self.dash_rating_lbl.winfo_exists():
+                        self.dash_rating_lbl.config(text=score_info["rating"], fg=score_info["color"])
 
             # Check Battery Health Alarm if enabled
             if getattr(self, "battery_alarm_enabled", False):
@@ -652,7 +757,7 @@ class ApexOptimizerApp:
 
         tk.Label(
             title_frame,
-            text="System Overview & Quick Optimization",
+            text="System Overview & Health Diagnostics",
             font=(FONT_FAMILY, 15, "bold"),
             fg=THEME["text_main"],
             bg=THEME["bg_app"]
@@ -660,7 +765,7 @@ class ApexOptimizerApp:
 
         tk.Label(
             title_frame,
-            text="Real-time system health diagnostics, live hardware telemetry, and one-click tuning.",
+            text="Real-time system health score, live hardware telemetry, and one-click rapid tuning.",
             font=(FONT_FAMILY, 9),
             fg=THEME["text_muted"],
             bg=THEME["bg_app"]
@@ -670,32 +775,53 @@ class ApexOptimizerApp:
         grid_frame = tk.Frame(self.content_container, bg=THEME["bg_app"])
         grid_frame.pack(fill=tk.X, pady=(0, 16))
 
-        # 1. OS Card
+        # 1. System Health & Optimization Rating Card
+        score_info = self.engine.calculate_health_score(self.live_states)
         c1 = ModernCard(grid_frame)
         c1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
-        tk.Label(c1, text="💻  Operating System", font=(FONT_FAMILY, 8, "bold"), fg=THEME["primary_light"], bg=THEME["bg_card"]).pack(anchor="w")
-        tk.Label(c1, text=self.hw_info["os_build"], font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"], wraplength=170, justify="left").pack(anchor="w", pady=(6, 0))
+        tk.Label(c1, text="🛡️  System Health Score", font=(FONT_FAMILY, 8, "bold"), fg=THEME["primary_light"], bg=THEME["bg_card"]).pack(anchor="w")
+        
+        score_row = tk.Frame(c1, bg=THEME["bg_card"])
+        score_row.pack(fill=tk.X, pady=(4, 2))
+        self.dash_score_lbl = tk.Label(score_row, text=f"{score_info['score']}%", font=(FONT_FAMILY, 16, "bold"), fg=score_info["color"], bg=THEME["bg_card"])
+        self.dash_score_lbl.pack(side=tk.LEFT)
+        self.dash_rating_lbl = tk.Label(score_row, text=score_info["rating"], font=(FONT_FAMILY, 9, "bold"), fg=score_info["color"], bg=THEME["bg_card"])
+        self.dash_rating_lbl.pack(side=tk.LEFT, padx=(8, 0))
 
-        # 2. CPU Card
+        self.dash_tweaks_lbl = tk.Label(
+            c1,
+            text=f"{score_info['applied_count']} of {score_info['total_count']} Essential Tweaks Active",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"]
+        )
+        self.dash_tweaks_lbl.pack(anchor="w")
+
+        # 2. CPU Card (Live Load)
         c2 = ModernCard(grid_frame)
         c2.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
         tk.Label(c2, text="⚡  Processor (CPU)", font=(FONT_FAMILY, 8, "bold"), fg=THEME["accent_cyan"], bg=THEME["bg_card"]).pack(anchor="w")
-        tk.Label(c2, text=self.hw_info["cpu_name"], font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"], wraplength=170, justify="left").pack(anchor="w", pady=(6, 0))
+        self.dash_cpu_lbl = tk.Label(c2, text=f"{self.hw_info.get('cpu_percent', 0):.0f}% Load", font=(FONT_FAMILY, 13, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"])
+        self.dash_cpu_lbl.pack(anchor="w", pady=(2, 0))
+        tk.Label(c2, text=self.hw_info["cpu_name"], font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"], wraplength=170, justify="left").pack(anchor="w", pady=(2, 0))
 
         # 3. RAM Card (Live)
         c3 = ModernCard(grid_frame)
         c3.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
         tk.Label(c3, text="🧠  Physical Memory (Live)", font=(FONT_FAMILY, 8, "bold"), fg=THEME["success"], bg=THEME["bg_card"]).pack(anchor="w")
-        self.ram_val_lbl = tk.Label(c3, text=f"{self.hw_info['free_ram']} Free of {self.hw_info['total_ram']}", font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"], wraplength=170, justify="left")
-        self.ram_val_lbl.pack(anchor="w", pady=(6, 0))
+        self.ram_val_lbl = tk.Label(c3, text=f"{self.hw_info['free_ram']} Free of {self.hw_info['total_ram']}", font=(FONT_FAMILY, 11, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"], wraplength=170, justify="left")
+        self.ram_val_lbl.pack(anchor="w", pady=(4, 0))
+        tk.Label(c3, text=f"{self.hw_info['ram_percent']} Utilized", font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"]).pack(anchor="w", pady=(2, 0))
 
-        # 4. Storage Card
+        # 4. Uptime & Chassis Card
         c4 = ModernCard(grid_frame)
         c4.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        tk.Label(c4, text="💾  System Storage", font=(FONT_FAMILY, 8, "bold"), fg=THEME["warning"], bg=THEME["bg_card"]).pack(anchor="w")
-        tk.Label(c4, text=f"{self.hw_info['system_drive']} ({self.hw_info['drive_type']})", font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"]).pack(anchor="w", pady=(6, 0))
+        tk.Label(c4, text="⏱️  System Uptime & Drive", font=(FONT_FAMILY, 8, "bold"), fg=THEME["warning"], bg=THEME["bg_card"]).pack(anchor="w")
+        self.dash_uptime_lbl = tk.Label(c4, text=f"Uptime: {self.hw_info.get('uptime', 'Active')}", font=(FONT_FAMILY, 11, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"])
+        self.dash_uptime_lbl.pack(anchor="w", pady=(4, 0))
+        tk.Label(c4, text=f"{self.hw_info['system_drive']} ({self.hw_info['drive_type']}) • {self.hw_info['chassis_type']}", font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"], wraplength=170, justify="left").pack(anchor="w", pady=(2, 0))
 
-        # One-Click Quick Optimize Hero Card
+        # Hero Card: 1-Click Instant System Boost & Quick Optimize
         hero_card = ModernCard(self.content_container)
         hero_card.pack(fill=tk.X, pady=(0, 16))
 
@@ -704,7 +830,7 @@ class ApexOptimizerApp:
 
         tk.Label(
             h_left,
-            text="🚀  One-Click Recommended System Optimization",
+            text="⚡  1-Click Instant System Boost & RAM Working Set Purge",
             font=(FONT_FAMILY, 13, "bold"),
             fg=THEME["text_main"],
             bg=THEME["bg_card"]
@@ -712,41 +838,59 @@ class ApexOptimizerApp:
 
         tk.Label(
             h_left,
-            text="Applies essential performance, privacy, and shell optimizations automatically:\n"
-                 "• Network throttling index & foreground responsiveness reserve (90/10)\n"
-                 "• Disable background telemetry, tracking, and lockscreen spotlight ads\n"
-                 "• Clean taskbar clutter & enable classic right-click menu (Windows 11)\n"
-                 "• Accelerate menu animations and disable 5x Shift sticky keys dialog\n"
-                 "• Automatic System Restore point or registry export created before applying",
+            text="Instantly clears trapped standby memory, temporary caches, and speeds up system responsiveness:\n"
+                 "• Purge RAM Standby List and process working sets (instantly frees 1 GB - 3 GB memory)\n"
+                 "• Clean system and user temporary caches without closing running programs\n"
+                 "• Flush Windows DNS resolver cache to eliminate browsing latency\n"
+                 "• Real-time recalibration of Windows Health Score",
             font=(FONT_FAMILY, 9),
             fg=THEME["text_muted"],
             bg=THEME["bg_card"],
             justify="left"
         ).pack(anchor="w", pady=(6, 0))
 
-        opt_btn = tk.Button(
-            hero_card,
-            text="QUICK OPTIMIZE",
+        h_right = tk.Frame(hero_card, bg=THEME["bg_card"])
+        h_right.pack(side=tk.RIGHT, padx=10)
+
+        boost_btn = tk.Button(
+            h_right,
+            text="⚡ 1-CLICK BOOST & PURGE RAM",
             font=(FONT_FAMILY, 10, "bold"),
+            fg="#FFFFFF",
+            bg=THEME["success"],
+            activebackground=THEME["accent_cyan"],
+            activeforeground="#FFFFFF",
+            relief="flat",
+            cursor="hand2",
+            padx=18,
+            pady=10,
+            command=self.action_quick_boost
+        )
+        boost_btn.pack(fill=tk.X, pady=(0, 8))
+
+        opt_btn = tk.Button(
+            h_right,
+            text="🚀 QUICK OPTIMIZE TWEAKS",
+            font=(FONT_FAMILY, 9, "bold"),
             fg="#FFFFFF",
             bg=THEME["primary"],
             activebackground=THEME["primary_hover"],
             activeforeground="#FFFFFF",
             relief="flat",
             cursor="hand2",
-            padx=20,
-            pady=12,
+            padx=16,
+            pady=8,
             command=self.run_quick_optimize
         )
-        opt_btn.pack(side=tk.RIGHT, padx=10)
+        opt_btn.pack(fill=tk.X)
 
-        # Quick Health & Utilities Card
+        # Quick System Tools & Rollback Card
         action_card = ModernCard(self.content_container)
         action_card.pack(fill=tk.X)
 
         tk.Label(
             action_card,
-            text="Quick System Tools & Rollback",
+            text="Quick System Tools & Maintenance",
             font=(FONT_FAMILY, 11, "bold"),
             fg=THEME["text_main"],
             bg=THEME["bg_card"]
@@ -757,6 +901,7 @@ class ApexOptimizerApp:
 
         actions = [
             ("🛡️ Create System Restore Point", self.action_create_restore_point),
+            ("🧠 Purge Standby RAM", self.action_flush_ram_only),
             ("📁 Export Registry Backup", self.action_export_reg),
             ("🌐 Flush DNS Cache", self.quick_flush_dns),
             ("🔄 Restart Explorer Shell", self.quick_restart_explorer)
@@ -776,7 +921,7 @@ class ApexOptimizerApp:
                 pady=8,
                 command=cmd
             )
-            b.pack(side=tk.LEFT, padx=(0, 10))
+            b.pack(side=tk.LEFT, padx=(0, 8))
 
     # -------------------------------------------------------------
     # TAB 2: System & Speed
@@ -2282,6 +2427,57 @@ class ApexOptimizerApp:
             self.engine.restart_explorer()
             self.set_status("Explorer shell restarted.", is_busy=False)
         threading.Thread(target=worker, daemon=True).start()
+
+    def action_quick_boost(self):
+        def worker():
+            self.set_status("Executing 1-Click Instant System Boost...", is_busy=True)
+            ok, summary = self.engine.quick_boost()
+            self.set_status("1-Click Boost completed successfully.", is_busy=False)
+            if self.active_tab == "dashboard":
+                self.root.after(0, lambda: self.switch_tab("dashboard"))
+            if hasattr(self, 'tray_manager') and self.tray_manager:
+                self.tray_manager.notify("1-Click Boost complete! Memory freed and temp caches wiped.", "Apex Windows Optimizer")
+            messagebox.showinfo("1-Click Instant System Boost", summary)
+        threading.Thread(target=worker, daemon=True).start()
+
+    def action_flush_ram_only(self):
+        def worker():
+            self.set_status("Purging RAM Standby list and process working sets...", is_busy=True)
+            ok, count, freed_mb = self.engine.flush_ram_working_sets()
+            self.set_status(f"Flushed {count} processes, freed {freed_mb:.1f} MB RAM.", is_busy=False)
+            if self.active_tab == "dashboard":
+                self.root.after(0, lambda: self.switch_tab("dashboard"))
+            messagebox.showinfo("RAM Working Set Purge", f"Successfully flushed working sets for {count} active processes.\n\nReclaimed: {freed_mb:.1f} MB of RAM.")
+        threading.Thread(target=worker, daemon=True).start()
+
+    def on_window_close(self):
+        """Intercepts window close: minimizes to system tray instead of abrupt termination."""
+        if hasattr(self, "tray_manager") and self.tray_manager and self.tray_manager.is_active():
+            self.minimize_to_tray(show_toast=True)
+        else:
+            self.quit_completely()
+
+    def minimize_to_tray(self, show_toast: bool = False):
+        self.root.withdraw()
+        if show_toast and hasattr(self, "tray_manager") and self.tray_manager:
+            self.tray_manager.notify(
+                "Apex Windows Optimizer is running minimized in your system tray. Right-click or double-click to reopen.",
+                "Apex Windows Optimizer Pro"
+            )
+
+    def restore_from_tray(self):
+        self.root.deiconify()
+        self.root.lift()
+        self.root.focus_force()
+
+    def quit_completely(self):
+        if hasattr(self, "tray_manager") and self.tray_manager:
+            self.tray_manager.stop()
+        try:
+            self.root.destroy()
+        except Exception:
+            pass
+        sys.exit(0)
 
     def action_copy_log(self):
         content = self.terminal_text.get("1.0", tk.END)
