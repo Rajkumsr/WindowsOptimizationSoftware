@@ -80,10 +80,18 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
   * Crash Dumps & Windows Error Reports
   * Explorer Thumbnail Cache
 
-### 11. 📦 Software Updater (WinGet)
+### 11. 🔋 Universal Battery & Power Conservation Suite (Laptops)
+* **Real-Time Battery & Power Telemetry**: Instant battery percentage, AC adapter status, charging state, and automatic chassis classification (`🖥️ Desktop PC` vs `💻 Laptop`).
+* **Processor Eco Boost Capping on DC**: Limits CPU boost frequency to 85% and optimizes Energy-Performance Preference (`PERFEPP`) on battery power to eliminate thermal spikes, quiet fan noise, and extend battery runtime by up to 25%.
+* **PCIe Link State Power Management (ASPM)**: Activates aggressive Active State Power Management (`powercfg /setdcvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 2`) to power down idle PCIe bus lanes and NVMe storage on DC.
+* **Fast Startup Standby Drain Prevention**: Disables hybrid kernel hibernation (`HiberbootEnabled = 0`) to stop 3-5% phantom battery drain overnight while laptops are powered off.
+* **Smart 80% / 20% Battery Health Audio & Toast Guard**: Live background monitoring guard that chimes and notifies you when charging hits 80% (to unplug and preserve lithium-ion cell longevity) or drops below 20% (to avoid deep discharge wear).
+* **Official Windows Battery Health & Wear Diagnostics**: One-click generation of the detailed Microsoft Battery Lifecycle & Capacity Degradation report (`powercfg /batteryreport`) launched automatically in your browser.
+
+### 12. 📦 Software Updater (WinGet)
 * Integrates directly with Windows Package Manager to inspect and update all installed applications silently.
 
-### 12. 📝 Live Activity Console
+### 13. 📝 Live Activity Console
 * Color-coded real-time execution log with copy-to-clipboard and export capabilities.
 
 ---

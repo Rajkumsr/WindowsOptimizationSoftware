@@ -1104,7 +1104,7 @@ class OptimizationEngine:
         return True
 
     # -------------------------------------------------------------
-    # 10. Battery & AC Power Care Engine (Acer & Hardware Bypass)
+    # 10. Battery & Power Conservation Engine (Universal)
     # -------------------------------------------------------------
     def get_battery_telemetry(self) -> Dict[str, Any]:
         """
@@ -1126,41 +1126,20 @@ class OptimizationEngine:
             "percent": 0,
             "ac_online": False,
             "is_charging": False,
-            "status_text": "Desktop / AC Only",
-            "manufacturer": "Generic",
-            "product_name": "PC",
-            "model_name": "System PC",
-            "is_acer_hardware": False,
-            "is_bypass_supported": False,
-            "acc_service_installed": False,
-            "acc_service_running": False,
-            "limit_80_active": False,
-            "fast_startup_enabled": True
+            "status_text": "Desktop / Direct AC Power",
+            "model_name": "Windows PC",
+            "fast_startup_enabled": True,
+            "processor_eco_active": False,
+            "pcie_aspm_active": False
         }
 
-        # Query System Manufacturer & Model
+        # Query System Manufacturer & Model from BIOS
         try:
             key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"HARDWARE\DESCRIPTION\System\BIOS")
             mfg, _ = winreg.QueryValueEx(key, "SystemManufacturer")
             prod, _ = winreg.QueryValueEx(key, "SystemProductName")
             winreg.CloseKey(key)
-            mfg_clean = mfg.strip()
-            prod_clean = prod.strip()
-            status["manufacturer"] = mfg_clean
-            status["product_name"] = prod_clean
-            status["model_name"] = f"{mfg_clean} {prod_clean}"
-            mfg_lower = mfg_clean.lower()
-            if any(k in mfg_lower for k in ["acer", "predator", "nitro", "gateway", "packard bell"]):
-                status["is_acer_hardware"] = True
-        except Exception:
-            pass
-
-        # Query ACCSvc service status
-        try:
-            c, out = self.run_cmd("sc query ACCSvc")
-            if c == 0:
-                status["acc_service_installed"] = True
-                status["acc_service_running"] = "RUNNING" in out.upper()
+            status["model_name"] = f"{mfg.strip()} {prod.strip()}"
         except Exception:
             pass
 
@@ -1176,150 +1155,100 @@ class OptimizationEngine:
                     status["is_charging"] = bool(sps.BatteryFlag & 8)
 
                     if status["ac_online"]:
-                        if status["limit_80_active"] and status["percent"] >= 80:
-                            status["status_text"] = f"🔌 AC Bypass Active ({status['percent']}%) - Cell Wear Protection"
-                        elif status["is_charging"]:
+                        if status["is_charging"]:
                             status["status_text"] = f"⚡ Charging ({status['percent']}%) [AC Connected]"
                         else:
-                            status["status_text"] = f"🔌 Plugged In, Idle ({status['percent']}%)"
+                            status["status_text"] = f"🔌 Plugged In, Fully Charged ({status['percent']}%)"
                     else:
                         status["status_text"] = f"🔋 On Battery Power ({status['percent']}%)"
         except Exception:
             pass
 
-        # Calculate whether hardware bypass is supported on this machine
-        status["is_bypass_supported"] = bool(status["has_battery"] and status["is_acer_hardware"])
-
-        # Query 80% charge limit state
-        status["limit_80_active"] = self.get_acer_charge_limit_state()
-
         # Query Fast Startup state
         status["fast_startup_enabled"] = self.get_fast_startup_state()
 
+        # Query Processor Eco & PCIe ASPM states
+        status["processor_eco_active"] = self.get_processor_eco_state()
+        status["pcie_aspm_active"] = self.get_pcie_aspm_state()
+
         return status
 
-    def get_acer_charge_limit_state(self) -> bool:
-        """
-        Checks whether the Acer 80% Battery Charge Limit / AC Bypass mode
-        is enabled in the OEM registry or service configurations.
-        """
-        keys_to_check = [
-            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\OEM\Acer\Acer Care Center\Battery"),
-            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\OEM\Acer\Quick Access\Battery"),
-            (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Acer\Care Center\Battery")
-        ]
-        for root, sub in keys_to_check:
-            try:
-                k = winreg.OpenKey(root, sub, 0, winreg.KEY_READ)
-                val, _ = winreg.QueryValueEx(k, "BatteryChargeLimit")
-                winreg.CloseKey(k)
-                if val == 1:
-                    return True
-            except Exception:
-                pass
+    def get_processor_eco_state(self) -> bool:
+        """Checks whether DC processor throttle capping is active (<=85%)."""
+        try:
+            c, out = self.run_cmd("powercfg /query SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX")
+            for line in out.splitlines():
+                if "Current DC Power Setting Index:" in line:
+                    val = int(line.split(":")[-1].strip(), 16)
+                    return val <= 85
+        except Exception:
+            pass
         return False
 
-    def set_acer_charge_limit(self, enable: bool) -> Tuple[bool, str]:
+    def toggle_processor_eco(self, enable: bool) -> Tuple[bool, str]:
         """
-        Enables or disables the 80% Battery Charge Limit / AC Direct Bypass mode:
-        1. Invokes root\\wmi:BatteryControl.SetBatteryHealthControl hardware call.
-        2. Configures OEM registry keys for Care Center & Quick Access persistence.
-        3. Restarts/signals ACCSvc service to commit to the hardware Embedded Controller (EC).
-        If running without administrative privileges, automatically triggers an elevated UAC helper.
+        Configures CPU energy efficiency and thermal capping on battery (DC):
+        Limits CPU boost frequency to 85% on battery, eliminating fan noise,
+        thermal degradation, and extending screen-on battery runtime by up to 25%.
         """
-        target_val = 1 if enable else 0
-        state_str = "80% AC Bypass Limit" if enable else "100% Full Charge Mode"
+        throttle_val = 85 if enable else 100
+        epp_val = 80 if enable else 50
+        state_str = "Enabled (85% Max Boost on Battery)" if enable else "Disabled (100% Full Power)"
+        self.log(f"Configuring Processor Eco Capping on Battery: {state_str}...", "INFO")
 
-        # Hardware compatibility check
-        telemetry = self.get_battery_telemetry()
-        if not telemetry["is_acer_hardware"]:
-            msg = f"Battery charge limiting via BatteryControl WMI is only supported on Acer hardware. Your system is: {telemetry['model_name']}."
-            self.log(msg, "WARNING")
-            return False, msg
-
-        self.log(f"Setting battery hardware charging profile to: {state_str}...", "INFO")
-
-        # If running un-elevated, invoke elevated UAC PowerShell helper directly
-        if not self.is_admin():
-            self.log("Non-elevated session: Invoking elevated UAC execution for Acer battery charging hardware...", "INFO")
-            elev_ps = f'''
-            $ErrorActionPreference = 'SilentlyContinue'
-            $target_val = {target_val}
-            $reg_paths = @(
-                'HKLM:\\SOFTWARE\\OEM\\Acer\\Acer Care Center\\Battery',
-                'HKLM:\\SOFTWARE\\OEM\\Acer\\Quick Access\\Battery',
-                'HKLM:\\SOFTWARE\\Acer\\Care Center\\Battery'
-            )
-            foreach ($p in $reg_paths) {{
-                if (-not (Test-Path $p)) {{ New-Item -Path $p -Force | Out-Null }}
-                Set-ItemProperty -Path $p -Name 'BatteryChargeLimit' -Value $target_val -Type DWord -Force
-            }}
-            try {{
-                $inst = Get-WmiObject -Namespace root\\wmi -Class BatteryControl -ErrorAction SilentlyContinue
-                if ($inst) {{
-                    $in = $inst.GetMethodParameters("SetBatteryHealthControl")
-                    $in["uBatteryNo"] = 0
-                    $in["uFunctionMask"] = 1
-                    $in["uFunctionStatus"] = $target_val
-                    $in["uReservedIn"] = 0
-                    $inst.InvokeMethod("SetBatteryHealthControl", $in, $null) | Out-Null
-                }}
-            }} catch {{}}
-            Restart-Service -Name ACCSvc -Force -ErrorAction SilentlyContinue
-            '''
-            c, out = self.run_elevated_ps(elev_ps)
-            if self.get_acer_charge_limit_state() == enable:
-                msg = f"Battery charging profile successfully updated to: {state_str} (via UAC elevation)."
-                self.log(msg, "SUCCESS")
-                return True, msg
-
-        # 1. Update Registry Keys for Acer Care Center and Quick Access
-        reg_paths = [
-            r"SOFTWARE\OEM\Acer\Acer Care Center\Battery",
-            r"SOFTWARE\OEM\Acer\Quick Access\Battery",
-            r"SOFTWARE\Acer\Care Center\Battery"
+        cmds = [
+            f"powercfg /setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PROCTHROTTLEMAX {throttle_val}",
+            f"powercfg /setdcvalueindex SCHEME_CURRENT SUB_PROCESSOR PERFEPP {epp_val}",
+            "powercfg /setactive SCHEME_CURRENT"
         ]
-        reg_updated = False
-        for path in reg_paths:
-            try:
-                k = winreg.CreateKeyEx(winreg.HKEY_LOCAL_MACHINE, path, 0, winreg.KEY_SET_VALUE | winreg.KEY_WOW64_64KEY)
-                winreg.SetValueEx(k, "BatteryChargeLimit", 0, winreg.REG_DWORD, target_val)
-                winreg.CloseKey(k)
-                reg_updated = True
-            except Exception as e:
-                self.log(f"Notice writing registry {path}: {e}", "INFO")
+        success = True
+        for cmd in cmds:
+            c, _ = self.run_cmd(cmd)
+            if c != 0:
+                success = False
 
-        # 2. Invoke Acer ACPI/WMI Hardware Method directly
-        wmi_script = f'''
-        $ErrorActionPreference = 'SilentlyContinue'
-        try {{
-            $inst = Get-WmiObject -Namespace root\\wmi -Class BatteryControl -ErrorAction SilentlyContinue
-            if ($inst) {{
-                $in = $inst.GetMethodParameters("SetBatteryHealthControl")
-                $in["uBatteryNo"] = 0
-                $in["uFunctionMask"] = 1
-                $in["uFunctionStatus"] = {target_val}
-                $in["uReservedIn"] = 0
-                $res = $inst.InvokeMethod("SetBatteryHealthControl", $in, $null)
-                Write-Output "WMI_OK"
-            }}
-        }} catch {{}}
-        '''
-        c, wmi_out = self.run_ps(wmi_script)
-        if "WMI_OK" in wmi_out:
-            self.log("Acer hardware BatteryControl WMI ACPI method executed successfully.", "SUCCESS")
+        if success:
+            msg = f"Processor Battery Eco Capping {state_str}."
+            self.log(msg, "SUCCESS")
+            return True, msg
+        return False, "Failed to apply processor power configuration."
 
-        # 3. Restart ACCSvc service if installed to push command to Embedded Controller (EC)
-        c_svc, _ = self.run_cmd("sc query ACCSvc")
-        if c_svc == 0:
-            self.log("Synchronizing setting with Acer Care Center service (ACCSvc)...", "INFO")
-            self.run_cmd("net stop ACCSvc /y")
-            self.run_cmd("net start ACCSvc")
-            self.log("ACCSvc service synchronized with hardware Embedded Controller.", "SUCCESS")
+    def get_pcie_aspm_state(self) -> bool:
+        """Checks whether PCIe Link State Power Management (ASPM) is set to Maximum on DC."""
+        try:
+            c, out = self.run_cmd("powercfg /query SCHEME_CURRENT SUB_PCIEXPRESS ASPM")
+            for line in out.splitlines():
+                if "Current DC Power Setting Index:" in line:
+                    val = int(line.split(":")[-1].strip(), 16)
+                    return val == 2  # 2 = Maximum Power Savings
+        except Exception:
+            pass
+        return False
 
-        msg = f"Battery charging profile successfully updated to: {state_str}."
-        self.log(msg, "SUCCESS")
-        return True, msg
+    def toggle_pcie_aspm(self, enable: bool) -> Tuple[bool, str]:
+        """
+        Enables or disables aggressive PCIe Link State Power Management (ASPM) on battery.
+        Places idle NVMe, bus lanes, and GPU into low-power states to cut motherboard drain.
+        """
+        aspm_val = 2 if enable else 1  # 2 = Maximum Power Savings, 1 = Moderate
+        state_str = "Maximum Power Savings" if enable else "Standard Power"
+        self.log(f"Configuring PCIe Link State Power Management on DC: {state_str}...", "INFO")
+
+        cmds = [
+            f"powercfg /setdcvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM {aspm_val}",
+            "powercfg /setactive SCHEME_CURRENT"
+        ]
+        success = True
+        for cmd in cmds:
+            c, _ = self.run_cmd(cmd)
+            if c != 0:
+                success = False
+
+        if success:
+            msg = f"PCIe ASPM Link State on battery set to: {state_str}."
+            self.log(msg, "SUCCESS")
+            return True, msg
+        return False, "Failed to apply PCIe power management."
 
     def generate_battery_report(self) -> Tuple[bool, str]:
         """

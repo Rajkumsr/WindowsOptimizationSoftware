@@ -256,7 +256,8 @@ class ApexOptimizerApp:
         self.cleanup_sizes = {}
         self.service_selections = {}
         self.multi_user_deploy_var = tk.BooleanVar(value=True)
-        self.battery_feedback_msg = None
+        self.battery_alarm_enabled = False
+        self._last_alarm_notified = None
 
         self.setup_styles()
         self.build_header()
@@ -412,7 +413,7 @@ class ApexOptimizerApp:
             ("services", "⚙️  Services Optimizer"),
             ("debloat", "🗑️  App Debloater"),
             ("gaming", "🎮  Gaming & GPU Boost"),
-            ("battery", "🔋  Battery & Bypass"),
+            ("battery", "🔋  Battery & Power Saver"),
             ("cleaner", "🧹  Disk & Cache Clean"),
             ("updater", "📦  Software Updater"),
             ("terminal", "📝  Live Activity Log"),
@@ -601,6 +602,43 @@ class ApexOptimizerApp:
             if self.active_tab == "dashboard" and hasattr(self, 'ram_val_lbl') and self.ram_val_lbl.winfo_exists():
                 hw = self.engine.get_hardware_info()
                 self.ram_val_lbl.config(text=f"{hw['free_ram']} Free of {hw['total_ram']} ({hw['ram_percent']} Used)")
+
+            # Check Battery Health Alarm if enabled
+            if getattr(self, "battery_alarm_enabled", False):
+                try:
+                    telem = self.engine.get_battery_telemetry()
+                    if telem.get("has_battery", False):
+                        pct = telem.get("percent", 0)
+                        ac = telem.get("ac_online", False)
+                        if ac and pct >= 80 and self._last_alarm_notified != "high":
+                            self._last_alarm_notified = "high"
+                            try:
+                                import winsound
+                                winsound.MessageBeep(winsound.MB_ICONEXCLAMATION)
+                            except Exception:
+                                pass
+                            self.on_log_message(f"Battery Health Guard: Battery reached {pct}% on charger. Unplug to prevent high-voltage cell wear.", "WARNING")
+                            messagebox.showinfo(
+                                "Battery Health Guard",
+                                f"⚡ Battery Reached {pct}%\n\nYour battery is charged to 80%+. Please unplug the AC charger to protect lithium-ion cells from continuous high-voltage degradation."
+                            )
+                        elif not ac and pct <= 20 and self._last_alarm_notified != "low":
+                            self._last_alarm_notified = "low"
+                            try:
+                                import winsound
+                                winsound.MessageBeep(winsound.MB_ICONHAND)
+                            except Exception:
+                                pass
+                            self.on_log_message(f"Battery Low: Battery has dropped to {pct}%. Connect charger to avoid deep discharge.", "WARNING")
+                            messagebox.showwarning(
+                                "Battery Low Warning",
+                                f"🪫 Low Battery ({pct}%)\n\nPlease connect your charger to avoid deep discharge cell damage."
+                            )
+                        elif 25 < pct < 78:
+                            self._last_alarm_notified = None
+                except Exception:
+                    pass
+
             self.root.after(2500, _update)
 
         self.root.after(2500, _update)
@@ -1173,7 +1211,8 @@ class ApexOptimizerApp:
         ).pack(side=tk.RIGHT)
 
     # -------------------------------------------------------------
-    # TAB 8: Battery Health & AC Power Bypass (Acer Hardware Control)
+    # -------------------------------------------------------------
+    # TAB 8: Battery Health & Power Optimization (Universal)
     # -------------------------------------------------------------
     def render_battery_page(self):
         # Clear existing container widgets to prevent duplicate split screen on refresh
@@ -1181,13 +1220,14 @@ class ApexOptimizerApp:
             widget.destroy()
 
         self.render_section_header(
-            "Battery Health & AC Power Bypass",
-            "Hardware charge limiting, battery wear diagnostics, and AC bypass thermal preservation."
+            "Battery Health & Power Optimization",
+            "Universal laptop power preservation, CPU thermal capping, idle standby drain fixes, and battery diagnostics."
         )
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
 
         telem = self.engine.get_battery_telemetry()
+        has_battery = telem.get("has_battery", False)
 
         # ---------------------------------------------------------
         # Card 1: Real-Time Power & Battery Telemetry
@@ -1197,10 +1237,6 @@ class ApexOptimizerApp:
 
         t_top = tk.Frame(telem_card, bg=THEME["bg_card"])
         t_top.pack(fill=tk.X, pady=(0, 10))
-
-        is_limit_active = telem.get("limit_80_active", False)
-        has_battery = telem.get("has_battery", False)
-        mfg_name = telem.get("manufacturer", "System")
 
         if has_battery:
             pct = telem.get("percent", 0)
@@ -1215,14 +1251,14 @@ class ApexOptimizerApp:
             ).pack(side=tk.LEFT)
 
             if telem.get("ac_online", False):
-                if is_limit_active and pct >= 80:
-                    ac_badge_text = "🛡️ AC BYPASS ACTIVE (BATTERY PROTECTED)"
-                    ac_badge_fg = THEME["accent_cyan"]
-                    ac_badge_bg = THEME["bg_card_alt"]
-                else:
-                    ac_badge_text = "⚡ AC ADAPTER PLUGGED IN"
+                if telem.get("is_charging", False):
+                    ac_badge_text = "⚡ CHARGING (AC CONNECTED)"
                     ac_badge_fg = THEME["success"]
                     ac_badge_bg = THEME["success_bg"]
+                else:
+                    ac_badge_text = "🔌 FULLY CHARGED (PLUGGED IN)"
+                    ac_badge_fg = THEME["accent_cyan"]
+                    ac_badge_bg = THEME["bg_card_alt"]
             else:
                 ac_badge_text = "🔋 DISCHARGING ON BATTERY"
                 ac_badge_fg = THEME["warning"]
@@ -1249,7 +1285,7 @@ class ApexOptimizerApp:
         else:
             tk.Label(
                 t_top,
-                text="🖥️ Direct AC Wall Power",
+                text="🖥️ Direct AC Wall Current",
                 font=(FONT_FAMILY, 16, "bold"),
                 fg=THEME["accent_cyan"],
                 bg=THEME["bg_card"]
@@ -1278,236 +1314,66 @@ class ApexOptimizerApp:
             bg=THEME["bg_card"]
         ).pack(side=tk.LEFT)
 
-        if telem.get("is_acer_hardware", False):
-            svc_status = "RUNNING" if telem.get("acc_service_running") else ("INSTALLED" if telem.get("acc_service_installed") else "INACTIVE")
-            svc_color = THEME["accent_cyan"] if telem.get("acc_service_running") else THEME["text_dim"]
-            tk.Label(
-                details_frame,
-                text=f"⚙️ Acer ACCSvc: {svc_status}",
-                font=(FONT_FAMILY, 8, "bold"),
-                fg=svc_color,
-                bg=THEME["bg_card"]
-            ).pack(side=tk.RIGHT)
-        elif not has_battery:
-            tk.Label(
-                details_frame,
-                text="⚡ Hardware: Direct AC (Power Supply Unit)",
-                font=(FONT_FAMILY, 8, "bold"),
-                fg=THEME["text_dim"],
-                bg=THEME["bg_card"]
-            ).pack(side=tk.RIGHT)
-        else:
-            tk.Label(
-                details_frame,
-                text=f"⚙️ Architecture: {mfg_name} Laptop",
-                font=(FONT_FAMILY, 8, "bold"),
-                fg=THEME["warning"],
-                bg=THEME["bg_card"]
-            ).pack(side=tk.RIGHT)
+        tk.Label(
+            details_frame,
+            text=f"⚡ {telem.get('status_text', 'Active')}",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["accent_cyan"] if telem.get("ac_online") else THEME["warning"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.RIGHT)
 
         # ---------------------------------------------------------
-        # Card 2: Battery Charge Limiting & AC Bypass Hero Card
+        # Card 2: Universal Laptop Eco Power & Battery Lifespan Suite
         # ---------------------------------------------------------
-        hero_card = ModernCard(scroll_content)
-        hero_card.pack(fill=tk.X, pady=(0, 14))
+        eco_card = ModernCard(scroll_content)
+        eco_card.pack(fill=tk.X, pady=(0, 14))
 
-        # CASE 1: Acer Supported Laptop
-        if telem.get("is_bypass_supported", False):
-            # Optional In-Flight Action Success Alert Box
-            if hasattr(self, 'battery_feedback_msg') and self.battery_feedback_msg:
-                feedback_card = tk.Frame(hero_card, bg="#064E3B", padx=12, pady=8, highlightbackground="#10B981", highlightthickness=1)
-                feedback_card.pack(fill=tk.X, pady=(0, 10))
-                tk.Label(
-                    feedback_card,
-                    text=self.battery_feedback_msg,
-                    font=(FONT_FAMILY, 9, "bold"),
-                    fg="#34D399",
-                    bg="#064E3B",
-                    anchor="w"
-                ).pack(fill=tk.X)
+        eco_top = tk.Frame(eco_card, bg=THEME["bg_card"])
+        eco_top.pack(fill=tk.X, pady=(0, 8))
 
-            hero_top = tk.Frame(hero_card, bg=THEME["bg_card"])
-            hero_top.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(
+            eco_top,
+            text="Universal Laptop Battery & Power Conservation Suite",
+            font=(FONT_FAMILY, 11, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT)
 
-            tk.Label(
-                hero_top,
-                text="Acer 80% Battery Charge Limit (AC Direct Bypass)",
-                font=(FONT_FAMILY, 11, "bold"),
-                fg=THEME["text_main"],
-                bg=THEME["bg_card"]
-            ).pack(side=tk.LEFT)
+        tk.Label(
+            eco_top,
+            text="⚡ UNIVERSAL COMPATIBILITY",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["success"],
+            bg=THEME["success_bg"],
+            padx=10,
+            pady=3,
+            relief="flat"
+        ).pack(side=tk.RIGHT)
 
-            if is_limit_active:
-                badge_text = "✅ BYPASS ENGAGED (80% LIMIT)"
-                badge_fg = THEME["success"]
-                badge_bg = THEME["success_bg"]
-            else:
-                badge_text = "⚡ 100% FULL CHARGE"
-                badge_fg = THEME["text_muted"]
-                badge_bg = THEME["bg_card_alt"]
+        tk.Label(
+            eco_card,
+            text="Native Windows kernel and hardware power policies to extend screen-on time, prevent idle standby discharge, and protect battery cell health on all Windows laptops.",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"],
+            justify="left",
+            wraplength=640
+        ).pack(anchor="w", pady=(0, 12))
 
-            tk.Label(
-                hero_top,
-                text=badge_text,
-                font=(FONT_FAMILY, 8, "bold"),
-                fg=badge_fg,
-                bg=badge_bg,
-                padx=10,
-                pady=3,
-                relief="flat"
-            ).pack(side=tk.RIGHT)
-
-            hero_desc = (
-                "Locks maximum battery charge at 80% and routes charger current directly to system components.\n"
-                "This bypasses battery charging cycles, stops continuous high-voltage saturation stress, and eliminates\n"
-                "battery swelling and thermal degradation when working or gaming while plugged into the charger."
-            )
-            tk.Label(
-                hero_card,
-                text=hero_desc,
-                font=(FONT_FAMILY, 8),
-                fg=THEME["text_muted"],
-                bg=THEME["bg_card"],
-                justify="left",
-                wraplength=640
-            ).pack(anchor="w", pady=(0, 12))
-
-            # Permanent Operational State Banner Box
-            status_box = tk.Frame(
-                hero_card,
-                bg="#064E3B" if is_limit_active else THEME["bg_input"],
-                padx=14,
-                pady=10,
-                highlightbackground="#10B981" if is_limit_active else THEME["border"],
-                highlightthickness=1
-            )
-            status_box.pack(fill=tk.X, pady=(0, 14))
-
-            if is_limit_active:
-                tk.Label(
-                    status_box,
-                    text="✅ BATTERY BYPASS SET WITH SUCCESS — HARDWARE 80% LIMIT ACTIVE",
-                    font=(FONT_FAMILY, 9, "bold"),
-                    fg="#34D399",
-                    bg="#064E3B",
-                    anchor="w"
-                ).pack(fill=tk.X)
-                tk.Label(
-                    status_box,
-                    text="• Hardware status: AC Power Bypass is actively engaged on your system.\n• The battery stops charging at 80% to protect cells from high-voltage wear and swelling.\n• Laptop draws electricity directly from the charger without cycling or heating the battery cells.",
-                    font=(FONT_FAMILY, 8),
-                    fg="#A7F3D0",
-                    bg="#064E3B",
-                    anchor="w",
-                    wraplength=640,
-                    justify="left"
-                ).pack(fill=tk.X, pady=(4, 0))
-            else:
-                tk.Label(
-                    status_box,
-                    text="⚡ STANDARD CHARGING PROFILE — 100% MAXIMUM CHARGE",
-                    font=(FONT_FAMILY, 9, "bold"),
-                    fg=THEME["text_main"],
-                    bg=THEME["bg_input"],
-                    anchor="w"
-                ).pack(fill=tk.X)
-                tk.Label(
-                    status_box,
-                    text="• Standard charging mode: Battery will charge up to 100% capacity.\n• Best suited when you need maximum portable battery run-time away from wall power.",
-                    font=(FONT_FAMILY, 8),
-                    fg=THEME["text_muted"],
-                    bg=THEME["bg_input"],
-                    anchor="w",
-                    wraplength=640,
-                    justify="left"
-                ).pack(fill=tk.X, pady=(4, 0))
-
-            hero_btn_row = tk.Frame(hero_card, bg=THEME["bg_card"])
-            hero_btn_row.pack(fill=tk.X)
-
-            if is_limit_active:
-                toggle_btn = tk.Button(
-                    hero_btn_row,
-                    text="DISABLE 80% LIMIT (ALLOW 100% CHARGE)",
-                    font=(FONT_FAMILY, 9, "bold"),
-                    fg=THEME["text_muted"],
-                    bg=THEME["bg_card_alt"],
-                    activebackground=THEME["border"],
-                    activeforeground=THEME["text_main"],
-                    relief="flat",
-                    cursor="hand2",
-                    padx=16,
-                    pady=7,
-                    command=lambda: self.action_toggle_acer_battery_limit(False)
-                )
-                toggle_btn.pack(side=tk.LEFT)
-            else:
-                toggle_btn = tk.Button(
-                    hero_btn_row,
-                    text="ENABLE 80% CHARGE LIMIT (AC BYPASS)",
-                    font=(FONT_FAMILY, 9, "bold"),
-                    fg="#FFFFFF",
-                    bg=THEME["primary"],
-                    activebackground=THEME["primary_hover"],
-                    relief="flat",
-                    cursor="hand2",
-                    padx=16,
-                    pady=7,
-                    command=lambda: self.action_toggle_acer_battery_limit(True)
-                )
-                toggle_btn.pack(side=tk.LEFT)
-
-            tk.Button(
-                hero_btn_row,
-                text="🔄 Refresh Status",
-                font=(FONT_FAMILY, 8),
-                fg=THEME["text_muted"],
-                bg=THEME["bg_card"],
-                activebackground=THEME["bg_card_alt"],
-                relief="flat",
-                cursor="hand2",
-                padx=10,
-                pady=7,
-                command=lambda: self.switch_tab("battery")
-            ).pack(side=tk.RIGHT)
-
-        # CASE 2: Desktop PC (No Internal Battery Present)
-        elif not has_battery:
-            hero_top = tk.Frame(hero_card, bg=THEME["bg_card"])
-            hero_top.pack(fill=tk.X, pady=(0, 8))
-
-            tk.Label(
-                hero_top,
-                text="Battery Charge Limit & AC Bypass",
-                font=(FONT_FAMILY, 11, "bold"),
-                fg=THEME["text_main"],
-                bg=THEME["bg_card"]
-            ).pack(side=tk.LEFT)
-
-            tk.Label(
-                hero_top,
-                text="🖥️ DESKTOP WORKSTATION",
-                font=(FONT_FAMILY, 8, "bold"),
-                fg=THEME["accent_cyan"],
-                bg=THEME["bg_card_alt"],
-                padx=10,
-                pady=3,
-                relief="flat"
-            ).pack(side=tk.RIGHT)
-
+        if not has_battery:
             desktop_box = tk.Frame(
-                hero_card,
+                eco_card,
                 bg=THEME["bg_input"],
                 padx=14,
                 pady=12,
                 highlightbackground=THEME["border"],
                 highlightthickness=1
             )
-            desktop_box.pack(fill=tk.X, pady=(6, 12))
+            desktop_box.pack(fill=tk.X, pady=(4, 10))
 
             tk.Label(
                 desktop_box,
-                text="🖥️ DESKTOP SYSTEM DETECTED — BATTERY CHARGE LIMIT NOT APPLICABLE",
+                text="🖥️ DESKTOP SYSTEM DETECTED",
                 font=(FONT_FAMILY, 9, "bold"),
                 fg=THEME["text_main"],
                 bg=THEME["bg_input"],
@@ -1516,143 +1382,55 @@ class ApexOptimizerApp:
 
             tk.Label(
                 desktop_box,
-                text=(
-                    "• Your computer is running on direct wall AC power supplied through the Power Supply Unit (PSU).\n"
-                    "• Because there is no internal lithium-ion battery pack, charge limiting and battery bypass are not needed.\n"
-                    "• Wall current already routes directly to the motherboard with zero cell wear."
-                ),
+                text="Your system runs on continuous direct AC wall current via the Power Supply Unit (PSU). Portable battery conservation tweaks are not needed for desktop systems.",
                 font=(FONT_FAMILY, 8),
                 fg=THEME["text_muted"],
                 bg=THEME["bg_input"],
                 anchor="w",
                 wraplength=640,
                 justify="left"
-            ).pack(fill=tk.X, pady=(6, 0))
-
-            hero_btn_row = tk.Frame(hero_card, bg=THEME["bg_card"])
-            hero_btn_row.pack(fill=tk.X)
-
-            tk.Button(
-                hero_btn_row,
-                text="🔄 Refresh Hardware Detection",
-                font=(FONT_FAMILY, 8),
-                fg=THEME["text_muted"],
-                bg=THEME["bg_card"],
-                activebackground=THEME["bg_card_alt"],
-                relief="flat",
-                cursor="hand2",
-                padx=10,
-                pady=7,
-                command=lambda: self.switch_tab("battery")
-            ).pack(side=tk.RIGHT)
-
-        # CASE 3: Non-Acer Laptop (Lenovo, Dell, HP, ASUS, MSI, Samsung, etc.)
+            ).pack(fill=tk.X, pady=(4, 0))
         else:
-            hero_top = tk.Frame(hero_card, bg=THEME["bg_card"])
-            hero_top.pack(fill=tk.X, pady=(0, 8))
-
-            tk.Label(
-                hero_top,
-                text="Hardware 80% Battery Charge Limit (AC Direct Bypass)",
-                font=(FONT_FAMILY, 11, "bold"),
-                fg=THEME["text_main"],
-                bg=THEME["bg_card"]
-            ).pack(side=tk.LEFT)
-
-            tk.Label(
-                hero_top,
-                text=f"⚠️ {mfg_name.upper()} DETECTED",
-                font=(FONT_FAMILY, 8, "bold"),
-                fg=THEME["warning"],
-                bg=THEME["warning_bg"],
-                padx=10,
-                pady=3,
-                relief="flat"
-            ).pack(side=tk.RIGHT)
-
-            oem_box = tk.Frame(
-                hero_card,
-                bg="#231E12",
-                padx=14,
-                pady=12,
-                highlightbackground="#B45309",
-                highlightthickness=1
+            # Toggle 1: Processor Eco Boost Capping (DC)
+            t1 = ToggleSwitch(
+                eco_card,
+                title="Processor Efficiency & Thermal Capping on Battery (DC)",
+                description="Caps aggressive CPU boost to 85% on battery. Eliminates high heat, fan noise, and extends screen-on battery runtime by up to 25%.",
+                default=telem.get("processor_eco_active", False),
+                command=lambda s: self.action_toggle_processor_eco(s)
             )
-            oem_box.pack(fill=tk.X, pady=(6, 12))
+            t1.pack(fill=tk.X, pady=(4, 8))
 
-            tk.Label(
-                oem_box,
-                text=f"⚠️ OEM HARDWARE NOTICE: {mfg_name.upper()} MOTHERBOARD ARCHITECTURE",
-                font=(FONT_FAMILY, 9, "bold"),
-                fg="#FBBF24",
-                bg="#231E12",
-                anchor="w"
-            ).pack(fill=tk.X)
-
-            oem_notice_text = (
-                f"• Direct hardware bypass and 80% charge threshold ('root\\wmi:BatteryControl') are hardcoded in Acer Embedded Controller (EC) firmware.\n"
-                f"• Microsoft Windows does not provide a universal battery limit API; each laptop manufacturer uses their own proprietary firmware.\n\n"
-                f"Official charge limit methods for your {mfg_name} laptop:\n"
-                f"  🔹 Lenovo: Lenovo Vantage → Device → Power → Enable 'Battery Conservation Mode' (80% / 60% limit)\n"
-                f"  🔹 ASUS: MyASUS → Customization → Select 'Battery Health Charging' (80% Lifespan Mode)\n"
-                f"  🔹 Dell: Dell Power Manager / Command | Power → Battery Settings → Select 'Primarily AC Use' (80% limit)\n"
-                f"  🔹 HP: HP BIOS/UEFI → Advanced → Power Management Options → Enable 'Battery Care Function' (80% Max)\n"
-                f"  🔹 MSI: MSI Center / Dragon Center → Battery Master → Select 'Balanced Mode' (80% limit)\n"
-                f"  🔹 Samsung: Samsung Settings → Battery → Toggle 'Protect Battery' (85% limit)\n\n"
-                f"✅ Universal features on this page (Official Windows Battery Report and Fast Startup Standby Fix) are 100% compatible with your {mfg_name} device!"
+            # Toggle 2: PCIe Link State Power Management (ASPM)
+            t2 = ToggleSwitch(
+                eco_card,
+                title="PCIe & Chipset Link State Power Management (ASPM)",
+                description="Places idle NVMe SSD lanes, discrete GPU, and motherboard interconnects into low-power states to cut idle motherboard battery drain.",
+                default=telem.get("pcie_aspm_active", False),
+                command=lambda s: self.action_toggle_pcie_aspm(s)
             )
+            t2.pack(fill=tk.X, pady=(4, 8))
 
-            tk.Label(
-                oem_box,
-                text=oem_notice_text,
-                font=(FONT_FAMILY, 8),
-                fg="#FDE68A",
-                bg="#231E12",
-                anchor="w",
-                wraplength=640,
-                justify="left"
-            ).pack(fill=tk.X, pady=(6, 0))
+            # Toggle 3: Disable Windows Fast Startup (Prevent Shutdown Battery Drain)
+            fast_start_active = telem.get("fast_startup_enabled", True)
+            t3 = ToggleSwitch(
+                eco_card,
+                title="Disable Windows Fast Startup (Stop Phantom Shutdown Drain)",
+                description="Stops Windows from saving an active kernel hibernation state at shutdown, eliminating 3-5% overnight battery discharge while powered off.",
+                default=not fast_start_active,
+                command=lambda s: self.action_toggle_fast_startup(not s)
+            )
+            t3.pack(fill=tk.X, pady=(4, 8))
 
-            hero_btn_row = tk.Frame(hero_card, bg=THEME["bg_card"])
-            hero_btn_row.pack(fill=tk.X)
-
-            def show_oem_guide():
-                messagebox.showinfo(
-                    f"{mfg_name} Battery Optimization Guide",
-                    f"Hardware Detection: {telem.get('model_name')}\n\n"
-                    f"Direct WMI battery bypassing is proprietary to Acer hardware.\n\n"
-                    f"For your {mfg_name} laptop, please activate battery protection using your native manufacturer utility (such as Lenovo Vantage, MyASUS, Dell Power Manager, or HP BIOS).\n\n"
-                    f"You can still generate the Official Windows Battery Report and toggle the Fast Startup standby drain fix below!"
-                )
-
-            tk.Button(
-                hero_btn_row,
-                text=f"ℹ️ HOW TO LIMIT CHARGE ON {mfg_name.upper()} LAPTOPS",
-                font=(FONT_FAMILY, 9, "bold"),
-                fg=THEME["warning"],
-                bg=THEME["bg_card_alt"],
-                activebackground=THEME["border"],
-                activeforeground=THEME["text_main"],
-                relief="flat",
-                cursor="hand2",
-                padx=14,
-                pady=7,
-                command=show_oem_guide
-            ).pack(side=tk.LEFT)
-
-            tk.Button(
-                hero_btn_row,
-                text="🔄 Refresh Hardware Status",
-                font=(FONT_FAMILY, 8),
-                fg=THEME["text_muted"],
-                bg=THEME["bg_card"],
-                activebackground=THEME["bg_card_alt"],
-                relief="flat",
-                cursor="hand2",
-                padx=10,
-                pady=7,
-                command=lambda: self.switch_tab("battery")
-            ).pack(side=tk.RIGHT)
+            # Toggle 4: Smart 80% / 20% Battery Health Audio & Toast Alarm
+            t4 = ToggleSwitch(
+                eco_card,
+                title="Smart 80% / 20% Battery Health Alert Guard",
+                description="Alerts you with an audio chime and notification when your battery reaches 80% while charging (to unplug and avoid cell wear) or drops below 20%.",
+                default=getattr(self, "battery_alarm_enabled", False),
+                command=lambda s: self.action_toggle_battery_alarm(s)
+            )
+            t4.pack(fill=tk.X, pady=(4, 4))
 
         # ---------------------------------------------------------
         # Card 3: Windows Battery Diagnostic & Wear Report
@@ -1680,8 +1458,11 @@ class ApexOptimizerApp:
             justify="left"
         ).pack(anchor="w", pady=(0, 12))
 
+        btn_row = tk.Frame(diag_card, bg=THEME["bg_card"])
+        btn_row.pack(fill=tk.X)
+
         tk.Button(
-            diag_card,
+            btn_row,
             text="📊 GENERATE BATTERY WEAR REPORT",
             font=(FONT_FAMILY, 9, "bold"),
             fg=THEME["accent_cyan"],
@@ -1692,34 +1473,21 @@ class ApexOptimizerApp:
             padx=14,
             pady=6,
             command=self.action_generate_battery_report
-        ).pack(anchor="w")
-
-        # ---------------------------------------------------------
-        # Card 4: Standby & Shutdown Battery Drain Tweak
-        # ---------------------------------------------------------
-        power_card = ModernCard(scroll_content)
-        power_card.pack(fill=tk.X, pady=(0, 14))
-
-        p_top = tk.Frame(power_card, bg=THEME["bg_card"])
-        p_top.pack(fill=tk.X, pady=(0, 6))
-
-        tk.Label(
-            p_top,
-            text="Laptop Standby & Power Preservation",
-            font=(FONT_FAMILY, 10, "bold"),
-            fg=THEME["text_main"],
-            bg=THEME["bg_card"]
         ).pack(side=tk.LEFT)
 
-        fast_start_active = telem["fast_startup_enabled"]
-        fs_toggle = ToggleSwitch(
-            power_card,
-            title="Disable Windows Fast Startup (Prevent Shutdown Battery Drain)",
-            description="Fast Startup keeps the Windows kernel in hybrid standby, causing 3-5% phantom battery drain overnight while powered off.",
-            default=not fast_start_active,
-            command=lambda state: self.action_toggle_fast_startup(not state)
-        )
-        fs_toggle.pack(fill=tk.X, pady=(4, 0))
+        tk.Button(
+            btn_row,
+            text="🔄 Refresh Status",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"],
+            activebackground=THEME["bg_card_alt"],
+            relief="flat",
+            cursor="hand2",
+            padx=10,
+            pady=6,
+            command=lambda: self.switch_tab("battery")
+        ).pack(side=tk.RIGHT)
 
     # -------------------------------------------------------------
     # TAB 9: Disk & Cache Clean (Real BeardSweeper)
@@ -2186,7 +1954,7 @@ class ApexOptimizerApp:
             ("LinkedIn Profile", "https://www.linkedin.com/in/rajkumar-patil-2b13a5180"),
             ("Runtime Architecture", "64-bit Native Windows (Python 3.13 / Tkinter GUI)"),
             ("Display Scaling", "Per-Monitor v2 High-DPI Awareness (Crisp 4K Rendering)"),
-            ("Hardware Management", "Direct ACPI / root\\wmi:BatteryControl & ACCSvc Service Sync"),
+            ("Power Management", "Kernel32 Zero-Overhead Telemetry & Windows Powercfg Eco Tuning"),
             ("Deployment Scope", "Multi-User Default Hive Deployment (HKU\\APEX_DEFAULT)")
         ]
 
@@ -2366,31 +2134,27 @@ class ApexOptimizerApp:
             messagebox.showinfo("Apex Optimizer", f"Applied {count} Gaming and GPU optimizations.")
         threading.Thread(target=worker, daemon=True).start()
 
-    def action_toggle_acer_battery_limit(self, target_state: bool):
+    def action_toggle_processor_eco(self, target_state: bool):
         def worker():
-            state_str = "80% AC Bypass Limit" if target_state else "100% Full Charge"
-            self.set_status(f"Configuring battery charge limit to: {state_str}...", is_busy=True)
-            ok, msg = self.engine.set_acer_charge_limit(target_state)
+            self.set_status("Configuring Processor Eco Capping...", is_busy=True)
+            ok, msg = self.engine.toggle_processor_eco(target_state)
             self.set_status(msg, is_busy=False)
-            if ok:
-                if target_state:
-                    self.battery_feedback_msg = "✅ Battery bypass set with success! (80% AC Bypass Limit Engaged)"
-                    info_msg = (
-                        "Acer 80% Battery Charge Limit (AC Bypass) is now ACTIVE.\n\n"
-                        "Your battery will stop charging once it reaches 80%, and the system will run directly "
-                        "on AC wall power (bypass), preventing high-voltage saturation and battery swelling."
-                    )
-                else:
-                    self.battery_feedback_msg = "⚡ Standard 100% Full Charge profile applied with success."
-                    info_msg = (
-                        "100% Full Charge Mode is now ACTIVE.\n\n"
-                        "Your battery will charge to its full 100% capacity."
-                    )
-                self.root.after(0, lambda: self.switch_tab("battery"))
-                messagebox.showinfo("Battery Care & AC Bypass", info_msg)
-            else:
-                self.root.after(0, lambda: self.switch_tab("battery"))
+            self.root.after(0, lambda: self.switch_tab("battery"))
         threading.Thread(target=worker, daemon=True).start()
+
+    def action_toggle_pcie_aspm(self, target_state: bool):
+        def worker():
+            self.set_status("Configuring PCIe Power Management...", is_busy=True)
+            ok, msg = self.engine.toggle_pcie_aspm(target_state)
+            self.set_status(msg, is_busy=False)
+            self.root.after(0, lambda: self.switch_tab("battery"))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def action_toggle_battery_alarm(self, target_state: bool):
+        self.battery_alarm_enabled = target_state
+        state_str = "Enabled (80% / 20% Alerts Active)" if target_state else "Disabled"
+        self.engine.log(f"Smart Battery Health Alert Guard: {state_str}.", "SUCCESS")
+        self.set_status(f"Battery Health Alarm: {state_str}.", is_busy=False)
 
     def action_generate_battery_report(self):
         def worker():
