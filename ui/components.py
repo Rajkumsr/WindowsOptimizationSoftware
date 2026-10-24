@@ -217,13 +217,16 @@ class ModernCard(tk.Frame):
     """Sleek dark panel card with subtle highlight border."""
     def __init__(self, parent, **kwargs):
         bg = kwargs.pop("bg", THEME["bg_card"])
+        padx = kwargs.pop("padx", 16)
+        pady = kwargs.pop("pady", 14)
+        border_col = kwargs.pop("highlightbackground", THEME.get("border", "#383838"))
         super().__init__(
             parent,
             bg=bg,
-            highlightbackground=THEME["border"],
+            highlightbackground=border_col,
             highlightthickness=1,
-            padx=16,
-            pady=14,
+            padx=padx,
+            pady=pady,
             **kwargs
         )
 

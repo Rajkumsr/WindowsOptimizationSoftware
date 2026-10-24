@@ -90,6 +90,7 @@ def build_executable(project_root, icon_path):
         "--hidden-import", "pystray._win32",
         "--hidden-import", "PIL",
         "--hidden-import", "psutil",
+        "--collect-submodules", "ui",
         "--clean",
         main_script
     ]
