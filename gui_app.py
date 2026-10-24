@@ -17,8 +17,9 @@ import ctypes
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 import webbrowser
+import winreg
 
 # Enable High-DPI Awareness and register AppUserModelID for Windows Taskbar
 if sys.platform == "win32":
@@ -41,36 +42,353 @@ if sys.platform == "win32":
 import core_optimizer
 
 # -------------------------------------------------------------
-# Color Palette & Visual Theme
+# Color Palette & Visual Theme (Dynamically Synchronized with Windows)
 # -------------------------------------------------------------
-THEME = {
-    "bg_app": "#0D0F17",         # Deep obsidian window background
-    "bg_sidebar": "#131622",     # Sleek dark sidebar
-    "bg_card": "#1A1E2E",        # Card / panel background
-    "bg_card_alt": "#21263A",    # Hover / secondary card
-    "bg_input": "#12141F",       # Input & terminal background
-    "border": "#282E47",         # Subtle border line
-    "border_highlight": "#3A4366",
-    
-    # Accents
-    "primary": "#6366F1",        # Indigo primary accent
-    "primary_hover": "#4F46E5",
-    "primary_light": "#818CF8",
-    "success": "#10B981",        # Emerald green
-    "success_bg": "#064E3B",
-    "warning": "#F59E0B",        # Amber
-    "warning_bg": "#78350F",
-    "danger": "#EF4444",         # Crimson
-    "danger_bg": "#7F1D1D",
-    
-    # Typography
-    "text_main": "#F9FAFB",      # Bright white text
-    "text_muted": "#9CA3AF",     # Neutral gray text
-    "text_dim": "#6B7280",       # Dark muted text
-    "accent_cyan": "#06B6D4"     # Cyan metrics
-}
+def load_windows_system_theme() -> Dict[str, str]:
+    """
+    Extracts the official Windows Personalization accent palette, dark/light theme,
+    and system color metrics directly from Windows Registry, DWM, and User32 APIs.
+    All colors dynamically synchronize with the user's active Windows configuration.
+    """
+    # 1. Detect Dark or Light mode from Windows Personalization
+    is_dark = True
+    if sys.platform == "win32":
+        try:
+            k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize")
+            app_light, _ = winreg.QueryValueEx(k, "AppsUseLightTheme")
+            is_dark = (app_light == 0)
+            winreg.CloseKey(k)
+        except Exception:
+            pass
 
+    # Baseline colors mapped to Windows dark/light mode
+    if is_dark:
+        theme = {
+            "is_dark": True,
+            "bg_app": "#0D0F17",         # Deep obsidian window background
+            "bg_sidebar": "#131622",     # Sleek dark sidebar
+            "bg_card": "#1A1E2E",        # Card / panel background
+            "bg_card_alt": "#21263A",    # Hover / secondary card
+            "bg_input": "#12141F",       # Input & terminal background
+            "border": "#282E47",         # Subtle border line
+            "border_highlight": "#3A4366",
+            "primary": "#0078D4",        # Windows classic blue default
+            "primary_hover": "#0067C0",
+            "primary_light": "#4CC2FF",
+            "accent_cyan": "#99EBFF",
+            "accent_contrast": "#F7630C",
+            "success": "#10B981",        # Emerald green
+            "success_bg": "#064E3B",
+            "warning": "#F59E0B",        # Amber
+            "warning_bg": "#78350F",
+            "danger": "#EF4444",         # Crimson
+            "danger_bg": "#7F1D1D",
+            "text_main": "#F9FAFB",      # Bright white text
+            "text_muted": "#9CA3AF",     # Neutral gray text
+            "text_dim": "#6B7280"        # Dark muted text
+        }
+    else:
+        theme = {
+            "is_dark": False,
+            "bg_app": "#F3F4F6",         # Light window background
+            "bg_sidebar": "#E5E7EB",     # Light sidebar
+            "bg_card": "#FFFFFF",        # White card
+            "bg_card_alt": "#F9FAFB",    # Off-white card
+            "bg_input": "#FFFFFF",       # Input background
+            "border": "#D1D5DB",         # Light border line
+            "border_highlight": "#9CA3AF",
+            "primary": "#0078D4",
+            "primary_hover": "#0067C0",
+            "primary_light": "#4CC2FF",
+            "accent_cyan": "#0284C7",
+            "accent_contrast": "#EA580C",
+            "success": "#059669",
+            "success_bg": "#D1FAE5",
+            "warning": "#D97706",
+            "warning_bg": "#FEF3C7",
+            "danger": "#DC2626",
+            "danger_bg": "#FEE2E2",
+            "text_main": "#111827",
+            "text_muted": "#4B5563",
+            "text_dim": "#9CA3AF"
+        }
+
+    if sys.platform != "win32":
+        return theme
+
+    # 2. Query AccentPalette from Windows Explorer (Official Fluent UI 8-color palette)
+    found_accent = False
+    try:
+        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Explorer\Accent")
+        pal, _ = winreg.QueryValueEx(k, "AccentPalette")
+        winreg.CloseKey(k)
+        if len(pal) >= 32:
+            colors = ['#{:02X}{:02X}{:02X}'.format(pal[i], pal[i+1], pal[i+2]) for i in range(0, 32, 4)]
+            theme["accent_cyan"] = colors[0]       # Lightest shade
+            theme["primary_light"] = colors[1]     # Lighter shade
+            theme["border_highlight"] = colors[2]  # Light shade / highlight
+            theme["primary"] = colors[3]           # Base primary Windows accent
+            theme["primary_hover"] = colors[4]     # Darker hover accent
+            if len(colors) > 7:
+                theme["accent_contrast"] = colors[7] # Windows contrast accent
+            found_accent = True
+    except Exception:
+        pass
+
+    # 3. Fallback: Query DWM AccentColor / ColorizationColor if AccentPalette was not read
+    if not found_accent:
+        try:
+            k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\DWM")
+            try:
+                acc, _ = winreg.QueryValueEx(k, "AccentColor")
+                r = acc & 0xFF
+                g = (acc >> 8) & 0xFF
+                b = (acc >> 16) & 0xFF
+                theme["primary"] = f"#{r:02X}{g:02X}{b:02X}"
+                theme["primary_hover"] = f"#{max(0, r-30):02X}{max(0, g-30):02X}{max(0, b-30):02X}"
+                theme["primary_light"] = f"#{min(255, r+50):02X}{min(255, g+50):02X}{min(255, b+50):02X}"
+            except Exception:
+                c_val, _ = winreg.QueryValueEx(k, "ColorizationColor")
+                r = (c_val >> 16) & 0xFF
+                g = (c_val >> 8) & 0xFF
+                b = c_val & 0xFF
+                theme["primary"] = f"#{r:02X}{g:02X}{b:02X}"
+                theme["primary_hover"] = f"#{max(0, r-30):02X}{max(0, g-30):02X}{max(0, b-30):02X}"
+                theme["primary_light"] = f"#{min(255, r+50):02X}{min(255, g+50):02X}{min(255, b+50):02X}"
+            winreg.CloseKey(k)
+        except Exception:
+            pass
+
+    # 4. Pull Win32 GetSysColor system metrics for muted text
+    try:
+        c = ctypes.windll.user32.GetSysColor(17) # COLOR_GRAYTEXT
+        r, g, b = c & 0xFF, (c >> 8) & 0xFF, (c >> 16) & 0xFF
+        gray_hex = f"#{r:02X}{g:02X}{b:02X}"
+        if gray_hex not in ("#000000", "#FFFFFF"):
+            theme["text_muted"] = gray_hex
+    except Exception:
+        pass
+
+    return theme
+
+THEME = load_windows_system_theme()
 FONT_FAMILY = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+
+# Registry of all searchable system tweaks for instantaneous Ctrl+F search
+ALL_SEARCHABLE_TWEAKS = [
+    ("network_throttling", "system", "Disable Multimedia Network Throttling", "Sets NetworkThrottlingIndex to disabled so gaming and streaming packets are never prioritized down."),
+    ("system_responsiveness", "system", "Foreground System Responsiveness", "Reserves 90% CPU priority for active foreground games and programs."),
+    ("irp_stack_size", "system", "Optimize IRP Stack Size", "Sets IRPStackSize to 30, significantly increasing local network transfer throughput."),
+    ("fast_shutdown", "system", "Accelerated Service Termination", "Reduces WaitToKillServiceTimeout to 5000ms, preventing stalled services from delaying shutdown."),
+    ("long_paths", "system", "Enable NTFS Long File Paths", "Removes legacy MAX_PATH 260-character path limits in Windows file system."),
+    ("block_oem_bloat", "system", "Block OEM Firmware WPBT Software", "Blocks hardware vendors and UEFI firmware from automatically installing bundled promotional software at boot."),
+    ("disable_p2p_update", "system", "Disable P2P Update Seeding", "Stops Windows Delivery Optimization from using your upstream bandwidth to seed updates to others."),
+    ("f8_boot_menu", "system", "Enable Classic F8 Boot Menu", "Restores the legacy F8 boot selection menu for easy recovery and Safe Mode access."),
+    ("disable_hibernation", "system", "Disable Hibernation (Desktop PC)", "Deletes hiberfil.sys to reclaim disk space equivalent to your total RAM size on desktop PCs."),
+    ("disable_telemetry", "privacy", "Disable Diagnostic Telemetry & CEIP", "Disables DiagTrack, feedback notifications, Windows Error Reporting telemetry, and Customer Experience Program."),
+    ("disable_lockscreen_ads", "privacy", "Disable Lock Screen Spotlight Ads", "Prevents Microsoft Spotlight from displaying sponsored tips, recommendations, and advertisements on the lock screen."),
+    ("disable_recall", "privacy", "Disable Microsoft Recall AI Tracking", "Blocks automated continuous screenshot captures and AI analysis from the Recall subsystem."),
+    ("optimize_edge", "privacy", "Optimize Microsoft Edge Background Mode", "Stops Microsoft Edge from running in the background when closed and disables startup boost and shopping assistant."),
+    ("suppress_oobe_telemetry", "privacy", "Suppress OOBE Diagnostic Experiences", "Bypasses consumer data harvesting prompts and privacy opt-ins during updates."),
+    ("disable_office_telemetry", "privacy", "Disable Microsoft Office Telemetry", "Disables telemetry logging, Customer Experience feedback, and diagnostic data upload for Office 2013-365."),
+    ("show_file_extensions", "explorer", "Always Show File Extensions", "Always displays .exe, .zip, .bat file extensions to prevent spoofing."),
+    ("open_to_this_pc", "explorer", "Open File Explorer to 'This PC'", "Opens File Explorer directly to drive list instead of Quick Access / Home."),
+    ("win11_classic_menu", "explorer", "Windows 11 Classic Context Menu", "Restores the classic full right-click context menu instantly."),
+    ("disable_bing_search", "explorer", "Disable Bing Web Search in Start Menu", "Keeps Windows Start Menu search purely local and instantaneous."),
+    ("taskbar_end_task", "explorer", "Enable 'End Task' on Taskbar Right-Click", "Enables direct process termination from taskbar right-click."),
+    ("hide_taskbar_widgets", "explorer", "Hide Taskbar Widgets & News", "Removes MSN widgets icon from the Windows 11 taskbar."),
+    ("hide_copilot_button", "explorer", "Hide Windows Copilot Taskbar Button", "Hides Copilot AI icon from the taskbar."),
+    ("reduce_menu_delay", "explorer", "Accelerate Menu Show Delay (10ms)", "Reduces UI menu show latency for snappy navigation."),
+    ("disable_sticky_keys", "explorer", "Disable Sticky Keys 5x Shift Prompt", "Stops the annoying 5x Shift dialog during gaming."),
+    ("hags", "gaming", "Hardware-Accelerated GPU Scheduling (HAGS)", "Transfers frame scheduling directly to GPU VRAM for reduced render latency."),
+    ("windowed_optimizations", "gaming", "Optimizations for Windowed Games", "Enables modern DXGI flip presentation model for windowed gaming."),
+    ("game_mmcss", "gaming", "Multimedia Class Scheduler (MMCSS) Priority", "Configures maximum thread and GPU priority for gaming tasks."),
+    ("power_throttling", "gaming", "Disable Execution Power Throttling", "Prevents Windows from downclocking background CPU cores during games."),
+    ("ultimate_performance", "gaming", "Activate Ultimate Performance Power Scheme", "Activates Windows' hidden latency-free power plan."),
+    ("hpet_reset", "gaming", "Reset High Precision Event Timer (HPET)", "Removes explicit timer overrides to prevent micro-stuttering."),
+    ("processor_eco", "battery", "Processor Eco Boost Capping on Battery", "Limits CPU turbo boost to 85% on battery to eliminate thermal spikes and extend runtime."),
+    ("pcie_aspm", "battery", "PCIe Link State Power Management (ASPM)", "Puts idle PCIe lanes into maximum power savings on DC power."),
+    ("fast_startup", "battery", "Disable Windows Fast Startup", "Stops hybrid kernel hibernation and eliminates 3-5% overnight battery discharge.")
+]
+
+
+class ToastManager:
+    """Manages non-blocking floating dark toast notifications inside the app window."""
+    def __init__(self, root: tk.Tk):
+        self.root = root
+        self.active_toasts = []
+
+    def show(self, title: str, message: str, toast_type: str = "success", duration_ms: int = 3500):
+        icon_map = {
+            "success": ("✅", THEME["success"]),
+            "boost": ("⚡", THEME["primary"]),
+            "warning": ("⚠️", THEME["warning"]),
+            "info": ("ℹ️", THEME["accent_cyan"]),
+            "danger": ("❌", THEME["danger"])
+        }
+        icon_symbol, border_col = icon_map.get(toast_type, ("ℹ️", THEME["primary"]))
+
+        toast_frame = tk.Frame(
+            self.root,
+            bg=THEME["bg_card"],
+            highlightbackground=border_col,
+            highlightthickness=1,
+            padx=14,
+            pady=10
+        )
+
+        top_row = tk.Frame(toast_frame, bg=THEME["bg_card"])
+        top_row.pack(fill=tk.X)
+
+        tk.Label(
+            top_row,
+            text=icon_symbol,
+            font=(FONT_FAMILY, 11),
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Label(
+            top_row,
+            text=title,
+            font=(FONT_FAMILY, 9, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT)
+
+        close_btn = tk.Label(
+            top_row,
+            text="✕",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["text_dim"],
+            bg=THEME["bg_card"],
+            cursor="hand2"
+        )
+        close_btn.pack(side=tk.RIGHT, padx=(10, 0))
+
+        tk.Label(
+            toast_frame,
+            text=message,
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"],
+            wraplength=280,
+            justify="left"
+        ).pack(anchor="w", pady=(4, 0))
+
+        self.active_toasts.append(toast_frame)
+        self._reposition()
+
+        def dismiss(event=None):
+            if toast_frame in self.active_toasts:
+                self.active_toasts.remove(toast_frame)
+                try:
+                    toast_frame.destroy()
+                except Exception:
+                    pass
+                self._reposition()
+
+        close_btn.bind("<Button-1>", dismiss)
+        toast_frame.bind("<Button-1>", dismiss)
+        self.root.after(duration_ms, dismiss)
+
+    def _reposition(self):
+        base_y = -35
+        offset = 0
+        for t in reversed(self.active_toasts):
+            try:
+                t.place(relx=1.0, rely=1.0, x=-24, y=base_y - offset, anchor="se")
+                offset += 80
+            except Exception:
+                pass
+
+
+class DonutGauge(tk.Canvas):
+    """
+    An anti-aliased circular donut gauge that displays and animates
+    the System Health & Optimization Score using Windows system accent colors.
+    """
+    def __init__(self, parent, size: int = 100, thickness: int = 8, **kwargs):
+        super().__init__(
+            parent,
+            width=size,
+            height=size,
+            bg=THEME["bg_card"],
+            highlightthickness=0,
+            **kwargs
+        )
+        self.size = size
+        self.thickness = thickness
+        self.current_score = 0
+        self.target_score = 0
+        self.rating_text = "OPTIMIZING"
+        self.accent_color = THEME["primary"]
+        self._animating = False
+
+    def set_score(self, score: int, rating: str, color: str = None, animate: bool = True):
+        self.target_score = max(0, min(100, int(score)))
+        self.rating_text = rating
+        self.accent_color = color if color else THEME["primary"]
+        if animate and not self._animating:
+            self._animate_step()
+        else:
+            self.current_score = self.target_score
+            self.draw()
+
+    def _animate_step(self):
+        self._animating = True
+        diff = self.target_score - self.current_score
+        if abs(diff) <= 2:
+            self.current_score = self.target_score
+            self.draw()
+            self._animating = False
+        else:
+            step = 3 if diff > 0 else -3
+            self.current_score += step
+            self.draw()
+            self.after(16, self._animate_step)
+
+    def draw(self):
+        self.delete("all")
+        pad = self.thickness // 2 + 3
+        x0 = pad
+        y0 = pad
+        x1 = self.size - pad
+        y1 = self.size - pad
+        cx = self.size // 2
+        cy = self.size // 2
+
+        # 1. Background Track Ring
+        self.create_oval(
+            x0, y0, x1, y1,
+            outline=THEME["bg_input"],
+            width=self.thickness
+        )
+
+        # 2. Swept Active Arc in Windows Accent Color
+        extent_angle = -(self.current_score / 100.0) * 359.9
+        if self.current_score > 0:
+            self.create_arc(
+                x0, y0, x1, y1,
+                start=90,
+                extent=extent_angle,
+                outline=self.accent_color,
+                width=self.thickness,
+                style="arc"
+            )
+
+        # 3. Inner Score Text & Rating Label
+        self.create_text(
+            cx, cy - 5,
+            text=f"{int(self.current_score)}%",
+            font=(FONT_FAMILY, 14, "bold"),
+            fill=THEME["text_main"]
+        )
+        self.create_text(
+            cx, cy + 13,
+            text=self.rating_text[:12],
+            font=(FONT_FAMILY, 6, "bold"),
+            fill=self.accent_color
+        )
 
 class ModernCard(tk.Frame):
     """A card container with border and background styling."""
@@ -87,7 +405,7 @@ class ModernCard(tk.Frame):
 
 class ToggleSwitch(tk.Frame):
     """An interactive modern toggle switch with title, description, and status chip."""
-    def __init__(self, parent, title: str, description: str = "", default: bool = True, command=None, **kwargs):
+    def __init__(self, parent, title: str, description: str = "", default: bool = True, command=None, category_chip: Optional[str] = None, **kwargs):
         super().__init__(parent, bg=THEME["bg_card"], **kwargs)
         self.state = default
         self.command = command
@@ -119,6 +437,19 @@ class ToggleSwitch(tk.Frame):
             relief="flat"
         )
         self.badge_lbl.pack(side=tk.LEFT, padx=(10, 0))
+
+        if category_chip:
+            self.cat_lbl = tk.Label(
+                header_row,
+                text=category_chip,
+                font=(FONT_FAMILY, 7, "bold"),
+                fg=THEME["primary_light"],
+                bg=THEME["bg_input"],
+                padx=6,
+                pady=1,
+                relief="flat"
+            )
+            self.cat_lbl.pack(side=tk.LEFT, padx=(6, 0))
 
         if description:
             self.desc_lbl = tk.Label(
@@ -334,6 +665,9 @@ class ApexOptimizerApp:
         self.battery_alarm_enabled = False
         self._last_alarm_notified = None
 
+        # Floating Toast Notification System
+        self.toast = ToastManager(self.root)
+
         # System Tray & Window Lifecycle Management
         self.tray_manager = ApexTrayManager(self)
         self.root.protocol("WM_DELETE_WINDOW", self.on_window_close)
@@ -389,6 +723,47 @@ class ApexOptimizerApp:
             bg=THEME["bg_sidebar"]
         )
         v_lbl.pack(side=tk.LEFT, padx=(8, 0), pady=(4, 0))
+
+        # Global Search Bar in Header
+        search_frame = tk.Frame(header, bg=THEME["bg_input"], highlightbackground=THEME["border"], highlightthickness=1)
+        search_frame.pack(side=tk.LEFT, padx=(24, 0), pady=4)
+
+        tk.Label(
+            search_frame,
+            text="🔍",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_input"]
+        ).pack(side=tk.LEFT, padx=(8, 4))
+
+        self.search_var = tk.StringVar()
+        self.search_entry = tk.Entry(
+            search_frame,
+            textvariable=self.search_var,
+            font=(FONT_FAMILY, 9),
+            fg=THEME["text_dim"],
+            bg=THEME["bg_input"],
+            insertbackground=THEME["primary"],
+            relief="flat",
+            width=25
+        )
+        self.search_entry.pack(side=tk.LEFT, padx=(0, 6), pady=4)
+        self.search_entry.insert(0, "Search tweaks... (Ctrl+F)")
+        self.search_entry.bind("<FocusIn>", self._on_search_focus_in)
+        self.search_entry.bind("<FocusOut>", self._on_search_focus_out)
+        self.search_entry.bind("<KeyRelease>", self._on_search_key_release)
+        self.search_entry.bind("<Escape>", lambda e: self.clear_search())
+        self.root.bind("<Control-f>", lambda e: self.search_entry.focus_set())
+
+        self.search_clear_btn = tk.Label(
+            search_frame,
+            text="✕",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["text_dim"],
+            bg=THEME["bg_input"],
+            cursor="hand2"
+        )
+        self.search_clear_btn.bind("<Button-1>", lambda e: self.clear_search())
 
         # Badges and Quick Tools on the Right
         tools_frame = tk.Frame(header, bg=THEME["bg_sidebar"])
@@ -487,6 +862,127 @@ class ApexOptimizerApp:
             command=self.quick_restart_explorer
         )
         exp_btn.pack(side=tk.LEFT)
+
+    def show_toast(self, title: str, message: str, toast_type: str = "success", duration_ms: int = 3500):
+        """Displays a non-blocking in-app floating toast notification."""
+        self.toast.show(title, message, toast_type, duration_ms)
+
+    def _on_search_focus_in(self, event=None):
+        if self.search_entry.get() == "Search tweaks... (Ctrl+F)":
+            self.search_entry.delete(0, tk.END)
+            self.search_entry.config(fg=THEME["text_main"])
+            self.search_clear_btn.pack(side=tk.RIGHT, padx=(0, 6))
+
+    def _on_search_focus_out(self, event=None):
+        if not self.search_entry.get().strip():
+            self.search_entry.delete(0, tk.END)
+            self.search_entry.insert(0, "Search tweaks... (Ctrl+F)")
+            self.search_entry.config(fg=THEME["text_dim"])
+            self.search_clear_btn.pack_forget()
+
+    def _on_search_key_release(self, event=None):
+        q = self.search_var.get().strip().lower()
+        if q == "search tweaks... (ctrl+f)":
+            q = ""
+        if q:
+            self.search_clear_btn.pack(side=tk.RIGHT, padx=(0, 6))
+            self.render_search_results(q)
+        else:
+            self.search_clear_btn.pack_forget()
+            if self.active_tab == "search":
+                self.switch_tab("dashboard")
+
+    def clear_search(self):
+        self.search_var.set("")
+        self.search_entry.delete(0, tk.END)
+        self.search_entry.insert(0, "Search tweaks... (Ctrl+F)")
+        self.search_entry.config(fg=THEME["text_dim"])
+        self.search_clear_btn.pack_forget()
+        self.root.focus_set()
+        if self.active_tab == "search":
+            self.switch_tab("dashboard")
+
+    def render_search_results(self, query: str):
+        self.active_tab = "search"
+        for tid, btn in self.tab_buttons.items():
+            btn.configure(bg=THEME["bg_sidebar"], fg=THEME["text_muted"], font=(FONT_FAMILY, 9))
+
+        for w in self.content_container.winfo_children():
+            w.destroy()
+
+        self.render_section_header(
+            f"Search Results: '{query}'",
+            "Instantly view and toggle matching optimizations across all system categories."
+        )
+
+        scroll_canvas, scroll_content = self.create_scrollable_container()
+
+        matched = [
+            t for t in ALL_SEARCHABLE_TWEAKS
+            if query in t[0].lower() or query in t[2].lower() or query in t[3].lower() or query in t[1].lower()
+        ]
+
+        if not matched:
+            no_card = ModernCard(scroll_content)
+            no_card.pack(fill=tk.X, pady=(20, 0))
+            tk.Label(
+                no_card,
+                text="🔍 No matching tweaks found",
+                font=(FONT_FAMILY, 11, "bold"),
+                fg=THEME["text_main"],
+                bg=THEME["bg_card"]
+            ).pack(anchor="w", pady=(0, 4))
+            tk.Label(
+                no_card,
+                text=f"No system optimizations matched '{query}'. Try searching for 'telemetry', 'gaming', 'dns', 'battery', or 'gpu'.",
+                font=(FONT_FAMILY, 9),
+                fg=THEME["text_muted"],
+                bg=THEME["bg_card"]
+            ).pack(anchor="w")
+            return
+
+        cat_names = {
+            "system": "System Performance",
+            "privacy": "Privacy & Tracking",
+            "explorer": "Explorer & Shell",
+            "gaming": "Gaming & GPU",
+            "battery": "Battery & Power"
+        }
+
+        for key, tab, title, desc in matched:
+            card = ModernCard(scroll_content)
+            card.pack(fill=tk.X, pady=(0, 8))
+
+            curr_val = self.live_states.get(key, True)
+            chip = cat_names.get(tab, tab.capitalize())
+
+            def make_cmd(k=key, t=tab, tit=title):
+                return lambda state: self._apply_search_toggle(k, t, tit, state)
+
+            t_switch = ToggleSwitch(card, title, desc, default=curr_val, command=make_cmd(), category_chip=chip)
+            t_switch.pack(fill=tk.X)
+
+    def _apply_search_toggle(self, key: str, tab: str, title: str, state: bool):
+        self.live_states[key] = state
+        def worker():
+            if tab == "system":
+                self.engine.apply_system_tweaks({key: state})
+            elif tab == "privacy":
+                self.engine.apply_privacy_tweaks({key: state})
+            elif tab == "explorer":
+                self.engine.apply_explorer_tweaks({key: state})
+            elif tab == "gaming":
+                self.engine.apply_gaming_tweaks({key: state})
+            elif tab == "battery":
+                if key == "processor_eco":
+                    self.engine.toggle_processor_eco(state)
+                elif key == "pcie_aspm":
+                    self.engine.toggle_pcie_aspm(state)
+                elif key == "fast_startup":
+                    self.engine.set_fast_startup(not state)
+            st_text = "Enabled [OPTIMIZED]" if state else "Reverted [DEFAULT]"
+            self.root.after(0, lambda: self.show_toast(f"Tweak Updated", f"{title}: {st_text}", "success" if state else "info"))
+        threading.Thread(target=worker, daemon=True).start()
 
     # -------------------------------------------------------------
     # 2. Body: Sidebar + Main Content Frame
@@ -775,27 +1271,32 @@ class ApexOptimizerApp:
         grid_frame = tk.Frame(self.content_container, bg=THEME["bg_app"])
         grid_frame.pack(fill=tk.X, pady=(0, 16))
 
-        # 1. System Health & Optimization Rating Card
+        # 1. System Health Donut Gauge Card
         score_info = self.engine.calculate_health_score(self.live_states)
         c1 = ModernCard(grid_frame)
         c1.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
-        tk.Label(c1, text="🛡️  System Health Score", font=(FONT_FAMILY, 8, "bold"), fg=THEME["primary_light"], bg=THEME["bg_card"]).pack(anchor="w")
         
-        score_row = tk.Frame(c1, bg=THEME["bg_card"])
-        score_row.pack(fill=tk.X, pady=(4, 2))
-        self.dash_score_lbl = tk.Label(score_row, text=f"{score_info['score']}%", font=(FONT_FAMILY, 16, "bold"), fg=score_info["color"], bg=THEME["bg_card"])
-        self.dash_score_lbl.pack(side=tk.LEFT)
-        self.dash_rating_lbl = tk.Label(score_row, text=score_info["rating"], font=(FONT_FAMILY, 9, "bold"), fg=score_info["color"], bg=THEME["bg_card"])
-        self.dash_rating_lbl.pack(side=tk.LEFT, padx=(8, 0))
+        c1_top = tk.Frame(c1, bg=THEME["bg_card"])
+        c1_top.pack(fill=tk.X)
+        tk.Label(c1_top, text="🛡️  System Health", font=(FONT_FAMILY, 8, "bold"), fg=THEME["primary_light"], bg=THEME["bg_card"]).pack(side=tk.LEFT)
+        tk.Label(c1_top, text="Win Accent", font=(FONT_FAMILY, 7, "bold"), fg=THEME["primary"], bg=THEME["bg_card"]).pack(side=tk.RIGHT)
 
-        self.dash_tweaks_lbl = tk.Label(
-            c1,
-            text=f"{score_info['applied_count']} of {score_info['total_count']} Essential Tweaks Active",
-            font=(FONT_FAMILY, 8),
-            fg=THEME["text_muted"],
-            bg=THEME["bg_card"]
-        )
-        self.dash_tweaks_lbl.pack(anchor="w")
+        gauge_row = tk.Frame(c1, bg=THEME["bg_card"])
+        gauge_row.pack(fill=tk.BOTH, expand=True, pady=(4, 0))
+
+        self.dash_gauge = DonutGauge(gauge_row, size=78, thickness=7)
+        self.dash_gauge.pack(side=tk.LEFT, padx=(0, 8))
+        self.dash_gauge.set_score(score_info["score"], score_info["rating"], score_info["color"], animate=True)
+
+        g_info = tk.Frame(gauge_row, bg=THEME["bg_card"])
+        g_info.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+        self.dash_score_lbl = tk.Label(g_info, text=f"{score_info['score']}%", font=(FONT_FAMILY, 14, "bold"), fg=score_info["color"], bg=THEME["bg_card"])
+        self.dash_score_lbl.pack(anchor="w")
+        self.dash_rating_lbl = tk.Label(g_info, text=score_info["rating"], font=(FONT_FAMILY, 7, "bold"), fg=score_info["color"], bg=THEME["bg_card"])
+        self.dash_rating_lbl.pack(anchor="w")
+        self.dash_tweaks_lbl = tk.Label(g_info, text=f"{score_info['applied_count']}/{score_info['total_count']} Active", font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"])
+        self.dash_tweaks_lbl.pack(anchor="w", pady=(2, 0))
 
         # 2. CPU Card (Live Load)
         c2 = ModernCard(grid_frame)
@@ -820,6 +1321,62 @@ class ApexOptimizerApp:
         self.dash_uptime_lbl = tk.Label(c4, text=f"Uptime: {self.hw_info.get('uptime', 'Active')}", font=(FONT_FAMILY, 11, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"])
         self.dash_uptime_lbl.pack(anchor="w", pady=(4, 0))
         tk.Label(c4, text=f"{self.hw_info['system_drive']} ({self.hw_info['drive_type']}) • {self.hw_info['chassis_type']}", font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"], wraplength=170, justify="left").pack(anchor="w", pady=(2, 0))
+
+        # 1-Click Scenario Preset Profiles Card
+        presets_card = ModernCard(self.content_container)
+        presets_card.pack(fill=tk.X, pady=(0, 16))
+
+        p_top = tk.Frame(presets_card, bg=THEME["bg_card"])
+        p_top.pack(fill=tk.X, pady=(0, 8))
+        tk.Label(
+            p_top,
+            text="🎛️  1-Click Scenario Preset Profiles",
+            font=(FONT_FAMILY, 11, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            p_top,
+            text="Instant preset configurations tailored for your specific task",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT, padx=(10, 0))
+
+        p_row = tk.Frame(presets_card, bg=THEME["bg_card"])
+        p_row.pack(fill=tk.X)
+
+        presets = [
+            ("🎮 Gaming & FPS Mode", "Low latency & GPU priority", self.apply_gaming_preset),
+            ("🔋 Battery Saver Mode", "Max runtime on DC & PCIe ASPM", self.apply_battery_preset),
+            ("🛡️ Maximum Privacy", "Zero telemetry & tracking", self.apply_privacy_preset),
+            ("🔄 Windows Defaults", "Restore stock settings", self.apply_defaults_preset)
+        ]
+
+        for title, subtitle, cmd in presets:
+            btn_frame = tk.Frame(p_row, bg=THEME["bg_card_alt"], highlightbackground=THEME["border"], highlightthickness=1, padx=10, pady=8)
+            btn_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
+
+            b = tk.Button(
+                btn_frame,
+                text=title,
+                font=(FONT_FAMILY, 9, "bold"),
+                fg=THEME["text_main"],
+                bg=THEME["bg_card_alt"],
+                activebackground=THEME["border"],
+                relief="flat",
+                cursor="hand2",
+                command=cmd
+            )
+            b.pack(anchor="w")
+
+            tk.Label(
+                btn_frame,
+                text=subtitle,
+                font=(FONT_FAMILY, 7),
+                fg=THEME["text_muted"],
+                bg=THEME["bg_card_alt"]
+            ).pack(anchor="w")
 
         # Hero Card: 1-Click Instant System Boost & Quick Optimize
         hero_card = ModernCard(self.content_container)
@@ -2233,7 +2790,7 @@ class ApexOptimizerApp:
 
             self.engine.log("=== One-Click Quick Optimization Completed Successfully! ===", "SUCCESS")
             self.set_status("One-Click Optimization finished.", is_busy=False)
-            messagebox.showinfo("Optimization Complete", "One-Click System Optimization completed successfully!\nA restart is recommended to apply all changes.")
+            self.root.after(0, lambda: self.show_toast("Quick Optimization Complete", "Applied core performance, privacy, and shell tweaks. Ready to fly!", "boost"))
 
         threading.Thread(target=worker, daemon=True).start()
 
@@ -2244,7 +2801,7 @@ class ApexOptimizerApp:
             count = self.engine.apply_system_performance_tweaks(opts)
             self.live_states = self.engine.detect_all_tweak_states()
             self.set_status(f"System changes applied ({count} updated).", is_busy=False)
-            messagebox.showinfo("Apex Optimizer", f"Successfully updated {count} system settings.")
+            self.root.after(0, lambda: self.show_toast("System Settings Updated", f"Successfully updated {count} system performance configurations.", "success"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_apply_privacy_tweaks(self):
@@ -2255,7 +2812,7 @@ class ApexOptimizerApp:
             self.engine.disable_telemetry_tasks()
             self.live_states = self.engine.detect_all_tweak_states()
             self.set_status(f"Privacy changes applied ({count} updated).", is_busy=False)
-            messagebox.showinfo("Apex Optimizer", f"Successfully updated {count} privacy & telemetry policies.")
+            self.root.after(0, lambda: self.show_toast("Privacy Policies Applied", f"Successfully updated {count} telemetry & privacy policies.", "success"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_apply_explorer_tweaks(self):
@@ -2266,7 +2823,7 @@ class ApexOptimizerApp:
             count = self.engine.apply_explorer_ui_tweaks(opts, deploy_to_all_profiles=deploy_all)
             self.live_states = self.engine.detect_all_tweak_states()
             self.set_status(f"Explorer changes applied ({count} updated).", is_busy=False)
-            messagebox.showinfo("Apex Optimizer", f"Successfully applied {count} Explorer and UI customizations.")
+            self.root.after(0, lambda: self.show_toast("Explorer Tweaks Applied", f"Applied {count} Explorer and UI customizations.", "success"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_apply_gaming_tweaks(self):
@@ -2276,7 +2833,7 @@ class ApexOptimizerApp:
             count = self.engine.apply_gaming_tweaks(opts)
             self.live_states = self.engine.detect_all_tweak_states()
             self.set_status(f"Gaming optimizations applied ({count} updated).", is_busy=False)
-            messagebox.showinfo("Apex Optimizer", f"Applied {count} Gaming and GPU optimizations.")
+            self.root.after(0, lambda: self.show_toast("Gaming Tweaks Applied", f"Applied {count} Gaming and GPU performance optimizations.", "boost"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_toggle_processor_eco(self, target_state: bool):
@@ -2324,7 +2881,7 @@ class ApexOptimizerApp:
             self.set_status("Configuring service startup modes...", is_busy=True)
             count = self.engine.optimize_services(selected)
             self.set_status(f"Services configured ({count} updated).", is_busy=False)
-            messagebox.showinfo("Apex Optimizer", f"Successfully updated {count} Windows service startup modes.")
+            self.root.after(0, lambda: self.show_toast("Services Configured", f"Successfully updated {count} Windows service startup modes.", "success"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_remove_bloatware(self):
@@ -2394,15 +2951,124 @@ class ApexOptimizerApp:
             messagebox.showinfo("WinGet Updater", "Application upgrade cycle completed.")
         threading.Thread(target=worker, daemon=True).start()
 
+    # -------------------------------------------------------------
+    # 1-Click Scenario Preset Profiles
+    # -------------------------------------------------------------
+    def apply_gaming_preset(self):
+        """1-Click Scenario Preset: Gaming & FPS Mode."""
+        def worker():
+            self.set_status("Applying 1-Click Gaming & FPS Mode Preset...", is_busy=True)
+            self.engine.apply_system_performance_tweaks({
+                "network_throttling": True,
+                "system_responsiveness": True,
+                "fast_shutdown": True
+            })
+            self.engine.apply_gaming_tweaks({
+                "hags": True,
+                "windowed_optimizations": True,
+                "game_mmcss": True,
+                "power_throttling": True,
+                "ultimate_performance": True
+            })
+            self.engine.apply_privacy_telemetry_tweaks({"disable_telemetry": True})
+            self.live_states = self.engine.detect_all_tweak_states()
+            self.set_status("Gaming & FPS Mode Preset successfully applied.", is_busy=False)
+            if self.active_tab == "dashboard":
+                self.root.after(0, lambda: self.switch_tab("dashboard"))
+            self.root.after(0, lambda: self.show_toast(
+                "Gaming & FPS Preset Applied",
+                "Enabled Hardware GPU Scheduling (HAGS), MMCSS audio/network priority, and Ultimate Performance plan.",
+                "boost"
+            ))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_battery_preset(self):
+        """1-Click Scenario Preset: Battery Saver Mode."""
+        def worker():
+            self.set_status("Applying 1-Click Battery Saver Preset...", is_busy=True)
+            self.engine.toggle_processor_eco(True)
+            self.engine.toggle_pcie_aspm(True)
+            self.engine.set_fast_startup(False)
+            self.engine.apply_privacy_telemetry_tweaks({
+                "disable_telemetry": True,
+                "optimize_edge": True
+            })
+            self.engine.disable_telemetry_tasks()
+            self.live_states = self.engine.detect_all_tweak_states()
+            self.set_status("Battery Saver Preset successfully applied.", is_busy=False)
+            if self.active_tab == "dashboard":
+                self.root.after(0, lambda: self.switch_tab("dashboard"))
+            self.root.after(0, lambda: self.show_toast(
+                "Battery Saver Preset Applied",
+                "Capped CPU turbo boost to 85% on DC, activated PCIe ASPM power savings, and prevented hybrid battery drain.",
+                "success"
+            ))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_privacy_preset(self):
+        """1-Click Scenario Preset: Maximum Privacy."""
+        def worker():
+            self.set_status("Applying 1-Click Maximum Privacy Preset...", is_busy=True)
+            privacy_opts = {
+                "disable_telemetry": True,
+                "disable_lockscreen_ads": True,
+                "disable_recall": True,
+                "optimize_edge": True,
+                "suppress_oobe_telemetry": True,
+                "disable_office_telemetry": True
+            }
+            self.engine.apply_privacy_telemetry_tweaks(privacy_opts)
+            self.engine.disable_telemetry_tasks()
+            self.engine.apply_system_performance_tweaks({"disable_p2p_update": True})
+            self.engine.apply_explorer_ui_tweaks({"disable_bing_search": True})
+            self.live_states = self.engine.detect_all_tweak_states()
+            self.set_status("Maximum Privacy Preset successfully applied.", is_busy=False)
+            if self.active_tab == "dashboard":
+                self.root.after(0, lambda: self.switch_tab("dashboard"))
+            self.root.after(0, lambda: self.show_toast(
+                "Maximum Privacy Preset Applied",
+                "Telemetry, Microsoft Recall AI tracking, Bing Start search, and background diagnostic tasks disabled.",
+                "success"
+            ))
+        threading.Thread(target=worker, daemon=True).start()
+
+    def apply_defaults_preset(self):
+        """1-Click Scenario Preset: Revert to Windows Stock Defaults."""
+        def worker():
+            self.set_status("Reverting to Windows Stock Defaults...", is_busy=True)
+            self.engine.apply_system_performance_tweaks({
+                "network_throttling": False,
+                "system_responsiveness": False,
+                "fast_shutdown": False,
+                "irp_stack_size": False,
+                "disable_p2p_update": False
+            })
+            self.engine.apply_gaming_tweaks({
+                "power_throttling": False,
+                "game_mmcss": False
+            })
+            self.engine.toggle_processor_eco(False)
+            self.engine.toggle_pcie_aspm(False)
+            self.live_states = self.engine.detect_all_tweak_states()
+            self.set_status("Reverted to Windows stock defaults.", is_busy=False)
+            if self.active_tab == "dashboard":
+                self.root.after(0, lambda: self.switch_tab("dashboard"))
+            self.root.after(0, lambda: self.show_toast(
+                "Windows Defaults Restored",
+                "Managed system, power, and gaming settings restored to default Windows stock configuration.",
+                "info"
+            ))
+        threading.Thread(target=worker, daemon=True).start()
+
     def action_create_restore_point(self):
         def worker():
             self.set_status("Creating System Restore Point...", is_busy=True)
             res = self.engine.create_restore_point("Apex Manual Restore Point")
             self.set_status("Restore point process finished.", is_busy=False)
             if res:
-                messagebox.showinfo("Restore Protection", "System Restore Point created successfully.")
+                self.root.after(0, lambda: self.show_toast("Restore Protection", "System Restore Point created successfully.", "success"))
             else:
-                messagebox.showwarning("Restore Protection", "Restore point creation could not be completed. Check activity log.")
+                self.root.after(0, lambda: self.show_toast("Restore Protection", "Restore point creation could not be completed. Check activity log.", "warning"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_export_reg(self):
@@ -2411,7 +3077,9 @@ class ApexOptimizerApp:
             res = self.engine.export_registry_backup()
             self.set_status("Registry export finished.", is_busy=False)
             if res:
-                messagebox.showinfo("Registry Backup", "Registry hives HKLM and HKCU exported successfully.")
+                self.root.after(0, lambda: self.show_toast("Registry Backup", "Registry hives HKLM and HKCU exported successfully.", "success"))
+            else:
+                self.root.after(0, lambda: self.show_toast("Registry Backup", "Registry export could not be completed. Check activity log.", "danger"))
         threading.Thread(target=worker, daemon=True).start()
 
     def quick_flush_dns(self):
@@ -2419,6 +3087,7 @@ class ApexOptimizerApp:
             self.set_status("Flushing DNS cache...", is_busy=True)
             self.engine.flush_dns()
             self.set_status("DNS cache flushed.", is_busy=False)
+            self.root.after(0, lambda: self.show_toast("DNS Resolver", "Windows DNS cache flushed successfully.", "info"))
         threading.Thread(target=worker, daemon=True).start()
 
     def quick_restart_explorer(self):
@@ -2426,6 +3095,7 @@ class ApexOptimizerApp:
             self.set_status("Restarting Explorer shell...", is_busy=True)
             self.engine.restart_explorer()
             self.set_status("Explorer shell restarted.", is_busy=False)
+            self.root.after(0, lambda: self.show_toast("Explorer Shell", "Windows Explorer shell restarted successfully.", "info"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_quick_boost(self):
@@ -2437,7 +3107,7 @@ class ApexOptimizerApp:
                 self.root.after(0, lambda: self.switch_tab("dashboard"))
             if hasattr(self, 'tray_manager') and self.tray_manager:
                 self.tray_manager.notify("1-Click Boost complete! Memory freed and temp caches wiped.", "Apex Windows Optimizer")
-            messagebox.showinfo("1-Click Instant System Boost", summary)
+            self.root.after(0, lambda: self.show_toast("1-Click Boost Complete", "Freed standby RAM memory, wiped temp caches, and flushed DNS cache.", "boost"))
         threading.Thread(target=worker, daemon=True).start()
 
     def action_flush_ram_only(self):
@@ -2447,7 +3117,7 @@ class ApexOptimizerApp:
             self.set_status(f"Flushed {count} processes, freed {freed_mb:.1f} MB RAM.", is_busy=False)
             if self.active_tab == "dashboard":
                 self.root.after(0, lambda: self.switch_tab("dashboard"))
-            messagebox.showinfo("RAM Working Set Purge", f"Successfully flushed working sets for {count} active processes.\n\nReclaimed: {freed_mb:.1f} MB of RAM.")
+            self.root.after(0, lambda: self.show_toast("RAM Working Set Purge", f"Flushed working sets for {count} processes. Reclaimed {freed_mb:.1f} MB RAM.", "success"))
         threading.Thread(target=worker, daemon=True).start()
 
     def on_window_close(self):

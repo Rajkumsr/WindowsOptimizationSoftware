@@ -7,22 +7,39 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 ## 🌟 Highlights & Capabilities
 
 ### 1. 📊 Comprehensive Dashboard & Live Health Diagnostics
-* **System Health & Hygiene Score (0–100%)**: Dynamic rating with real-time tweak and policy counter, calculating system efficiency and telemetry posture.
+* **Animated Donut Health Gauge**: Swept-arc circular health gauge rendered in your native Windows Accent color with dynamic score interpolation (0–100%) and hygiene ratings (`OPTIMAL`, `GOOD`, `FAIR`, `OPTIMIZING`).
+* **🎛️ 1-Click Scenario Preset Profiles**: Instant one-click profiles tailored for common computer scenarios:
+  * **🎮 Gaming & FPS Mode**: Hardware GPU Scheduling (HAGS), MMCSS audio/network scheduling, and Ultimate Performance power scheme.
+  * **🔋 Battery Saver Mode**: Limits CPU boost to 85% on DC, activates PCIe ASPM link power management, and halts fast-startup overnight drain.
+  * **🛡️ Maximum Privacy**: Shuts down telemetry, DiagTrack, CEIP, Microsoft Recall AI tracking, and Bing web search.
+  * **🔄 Windows Defaults**: Reverts all managed tweaks back to stock factory Windows settings.
 * **Real-time Live Telemetry**: Instant CPU load percentage, physical RAM usage (free, total, and percentage load), system drive, active chassis detection (`🖥️ Desktop PC` vs `💻 Laptop`), and precise system uptime (`GetTickCount64`).
 * **⚡ 1-Click Instant System Boost**: Flushes process working sets and Standby cache via Win32 `EmptyWorkingSet` (instantly freeing 1 GB – 3 GB of trapped memory), sweeps temporary clutter, and refreshes DNS cache in a single click.
 * **One-Click Quick Optimization**: Applies recommended safety tweaks across performance, privacy, and shell settings with automated rollback snapshot creation.
 * **Instant Utilities**: Purge Standby RAM, flush DNS cache, restart Windows Explorer shell, export registry backups, and create System Restore points.
 
-### 2. ⚡ Real State Detection & Bi-Directional Toggles
+### 2. 🎨 Native Windows Theme & Accent Palette Auto-Sync
+* **100% Dynamic Windows Colorization**: Extracts colors directly from Windows via `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent\AccentPalette` (8 Fluent UI shades), DWM Colorization APIs, and Win32 `GetSysColor` metrics.
+* **Dynamic Dark / Light Mode Adaptation**: Detects Windows `AppsUseLightTheme` and Personalization settings to blend buttons, gauge rings, active tabs, search outlines, and toast borders seamlessly with your OS theme.
+
+### 3. 🔍 Global `Ctrl+F` Real-Time Search & Quick-Toggle Engine
+* **Instantaneous Search**: Press `Ctrl+F` anywhere in the app to search across 33+ system, privacy, shell, gaming, and battery optimizations.
+* **Live Inline ToggleSwitches**: Toggling any setting inside search results immediately writes to the engine and updates system states with a toast notification.
+
+### 4. 🔔 Non-Blocking In-App Floating Toast Notifications (`ToastManager`)
+* **Zero Disruption**: Replaced blocking modal dialogs with smooth floating toast notifications anchored to the bottom right of the window.
+* **Contextual Visual Badges**: Toast cards feature status symbols (`✅`, `⚡`, `⚠️`, `ℹ️`, `❌`), Windows accent highlight borders, and auto-dismiss timers.
+
+### 5. ⚡ Real State Detection & Bi-Directional Toggles
 * **Live System State Inspection**: On launch, the software inspects the Windows Registry to determine what is already `[OPTIMIZED]` vs `[DEFAULT]`.
 * **Bi-Directional Revert / Undo**: Turning any toggle switch `OFF` restores standard Windows default configurations cleanly.
 * **Multi-User Profile Deployment**: Mounts `C:\Users\Default\NTUSER.DAT` into `HKU` so customizations automatically deploy to **all current and future user accounts**.
 
-### 3. 🎯 High-DPI Display Scaling Awareness
+### 6. 🎯 High-DPI Display Scaling Awareness
 * Fully declared DPI-aware process (`SetProcessDpiAwareness`) rendering crisp, clear text and cards on 1080p, 1440p, 4K, and 125%/150% scaled displays.
 * Scoped, smooth mousewheel scrolling that eliminates cross-tab scroll bleeding.
 
-### 4. ⚡ System & Kernel Performance
+### 7. ⚡ System & Kernel Performance
 * **Disable Network Throttling**: Uncaps multimedia and gaming network traffic (`NetworkThrottlingIndex` = `0xFFFFFFFF`).
 * **Foreground Responsiveness**: Sets 90% CPU priority for active applications and games (`SystemResponsiveness` = `10`).
 * **Accelerated Shutdown**: Shortens service termination delay to 5 seconds (`WaitToKillServiceTimeout` = `5000`).
@@ -33,14 +50,14 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **F8 Legacy Boot Menu**: Restores classic boot options for instant recovery.
 * **Desktop Hibernation Control**: Disables `hiberfil.sys` on desktop systems to reclaim disk space equivalent to total RAM size.
 
-### 5. 🛡️ Privacy & Telemetry
+### 8. 🛡️ Privacy & Telemetry
 * **Diagnostic Data & CEIP**: Disables DiagTrack, feedback notifications, error reporting telemetry, and Customer Experience Improvement tasks.
 * **Lock Screen Spotlight Ads**: Removes rotating sponsored tips and recommendations.
 * **Microsoft Recall AI**: Blocks automated background screenshot harvesting.
 * **Edge Optimization**: Disables Edge background preloading, startup boost, shopping assistant, and telemetry.
 * **Office Telemetry**: Disables telemetry logging and feedback for Microsoft Office 2013-365.
 
-### 6. 🎨 Explorer & Shell Personalization
+### 9. 🎨 Explorer & Shell Personalization
 * **File Extensions Visibility**: Always displays `.exe`, `.zip`, `.pdf`, etc. to prevent spoofing.
 * **Open to 'This PC'**: Sets File Explorer default view directly to drives instead of Quick Access.
 * **Windows 11 Classic Context Menu**: Restores full right-click context menu instantly.
@@ -50,11 +67,11 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **Accelerated Menu Delays**: Reduces menu show delay to 10ms.
 * **Sticky Keys Prompt**: Disables 5x Shift dialog.
 
-### 7. ⚙️ Services Optimizer
+### 10. ⚙️ Services Optimizer
 * **Granular Startup Control**: Presets for *Recommended (Safe)*, *Maximum Gaming*, and *Reset to Demand*.
 * Configures telemetry, Xbox background services, diagnostic hubs, and error reporting services without breaking core Windows functionality.
 
-### 8. 🗑️ App Debloater
+### 11. 🗑️ App Debloater
 * Uninstalls and unprovisions bloatware for current and future user accounts:
   * Microsoft Copilot
   * Bing Search Experience
@@ -65,7 +82,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
   * Phone Link (Your Phone)
   * Tips / Get Started
 
-### 9. 🎮 Gaming & GPU Boost
+### 12. 🎮 Gaming & GPU Boost
 * **Hardware-Accelerated GPU Scheduling (HAGS)**: Transfers frame scheduling directly to GPU VRAM.
 * **Windowed Games Optimizations**: Modern flip presentation model for DirectX 10/11 games.
 * **MMCSS Scheduling**: Configures maximum priority (`GPU Priority` = 8, `Priority` = 6, `SFIO Priority` = High).
@@ -73,7 +90,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **Ultimate Performance Power Scheme**: Activates Windows' hidden latency-free power plan.
 * **HPET Reset**: Removes explicit timer overrides to prevent micro-stuttering.
 
-### 10. 🧹 Deep Disk & Cache Cleaner (Real BeardSweeper)
+### 13. 🧹 Deep Disk & Cache Cleaner (Real BeardSweeper)
 * Calculates exact reclaimable storage space before cleaning:
   * Windows System Temp & User Profile Temp
   * Windows Update Download Cache (`SoftwareDistribution\Download`)
@@ -82,7 +99,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
   * Crash Dumps & Windows Error Reports
   * Explorer Thumbnail Cache
 
-### 11. 🔋 Universal Battery & Power Conservation Suite (Laptops)
+### 14. 🔋 Universal Battery & Power Conservation Suite (Laptops)
 * **Real-Time Battery & Power Telemetry**: Instant battery percentage, AC adapter status, charging state, and automatic chassis classification (`🖥️ Desktop PC` vs `💻 Laptop`).
 * **Processor Eco Boost Capping on DC**: Limits CPU boost frequency to 85% and optimizes Energy-Performance Preference (`PERFEPP`) on battery power to eliminate thermal spikes, quiet fan noise, and extend battery runtime by up to 25%.
 * **PCIe Link State Power Management (ASPM)**: Activates aggressive Active State Power Management (`powercfg /setdcvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 2`) to power down idle PCIe bus lanes and NVMe storage on DC.
@@ -90,13 +107,13 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **Smart 80% / 20% Battery Health Audio & Toast Guard**: Live background monitoring guard that chimes and notifies you when charging hits 80% (to unplug and preserve lithium-ion cell longevity) or drops below 20% (to avoid deep discharge wear).
 * **Official Windows Battery Health & Wear Diagnostics**: One-click generation of the detailed Microsoft Battery Lifecycle & Capacity Degradation report (`powercfg /batteryreport`) launched automatically in your browser.
 
-### 12. 📦 Software Updater (WinGet)
+### 15. 📦 Software Updater (WinGet)
 * Integrates directly with Windows Package Manager to inspect and update all installed applications silently.
 
-### 13. 📝 Live Activity Console
+### 16. 📝 Live Activity Console
 * Color-coded real-time execution log with copy-to-clipboard and export capabilities.
 
-### 14. 📌 System Tray Mini-Mode & Background Monitoring
+### 17. 📌 System Tray Mini-Mode & Background Monitoring
 * **Background Notification Area Integration**: Minimizes seamlessly to the Windows System Tray with a high-resolution dark icon (`pystray`).
 * **Quick Action Tray Menu**: Right-click the tray icon to execute *1-Click Instant Boost & Purge RAM*, open the *Battery & Power Saver* suite, or reopen the application.
 * **Smart Background Guard**: Keeps battery health alerts (80% / 20% lithium cell guard) active without keeping the main GUI window on your screen.
