@@ -451,15 +451,6 @@ class OptimizationEngine:
             code, _ = self.run_cmd(f'reg.exe delete "{hive}\\{subkey}" /v "{name}" /f')
             return code == 0
 
-    def delete_reg_key(self, root, subkey: str) -> bool:
-        """Deletes a registry key and all subkeys."""
-        try:
-            winreg.DeleteKey(root, subkey)
-            return True
-        except Exception:
-            hive = "HKLM" if root == winreg.HKEY_LOCAL_MACHINE else "HKCU"
-            code, _ = self.run_cmd(f'reg.exe delete "{hive}\\{subkey}" /f')
-            return code == 0
 
     # -------------------------------------------------------------
     # Real System State Detection (Read Registry & OS Settings)
