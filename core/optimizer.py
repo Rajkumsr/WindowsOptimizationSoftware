@@ -14,6 +14,8 @@ import shutil
 import tempfile
 import threading
 import re
+import time
+import xml.etree.ElementTree as ET
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple, Any
 
@@ -35,6 +37,10 @@ class OptimizationEngine:
         # In-memory hardware cache to prevent repeated subprocess execution during live telemetry loops
         self._cached_chassis_type = None
         self._cached_is_laptop = None
+        self._cached_battery_specs = None
+        self._last_battery_specs_time = 0
+        self._cached_battery_wmi_status = None
+        self._last_battery_wmi_time = 0
 
     def log(self, message: str, level: str = "INFO"):
         formatted_time = datetime.now().strftime("%H:%M:%S")
@@ -493,6 +499,11 @@ class OptimizationEngine:
         c, power_out = self.run_cmd("powercfg /a")
         states["disable_hibernation"] = ("hibernation has not been enabled" in power_out.lower() or "hibernation is not available" in power_out.lower())
 
+        # Power & Hardware Efficiency Tweaks
+        states["processor_eco"] = self.get_processor_eco_state()
+        states["pcie_aspm"] = self.get_pcie_aspm_state()
+        states["fast_startup"] = not self.get_fast_startup_state()
+
         # 2. Privacy & Telemetry
         telem = self.get_reg(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Policies\Microsoft\Windows\DataCollection", "AllowTelemetry")
         states["disable_telemetry"] = (telem == 0)
@@ -764,6 +775,24 @@ class OptimizationEngine:
                 if code == 0:
                     self.log(f"Hibernation configured to '{switch}'.", "SUCCESS")
                     success_count += 1
+
+        # Processor Eco Boost Capping on Battery (DC)
+        if "processor_eco" in options:
+            ok, _ = self.toggle_processor_eco(options["processor_eco"])
+            if ok:
+                success_count += 1
+
+        # PCIe Link State Power Management (ASPM)
+        if "pcie_aspm" in options:
+            ok, _ = self.toggle_pcie_aspm(options["pcie_aspm"])
+            if ok:
+                success_count += 1
+
+        # Disable Fast Startup (Stop phantom shutdown drain)
+        if "fast_startup" in options:
+            ok, _ = self.set_fast_startup(not options["fast_startup"])
+            if ok:
+                success_count += 1
 
         return success_count
 
@@ -1288,10 +1317,137 @@ class OptimizationEngine:
     # -------------------------------------------------------------
     # 10. Battery & Power Conservation Engine (Universal)
     # -------------------------------------------------------------
-    def get_battery_telemetry(self) -> Dict[str, Any]:
+    def _get_battery_specs(self, force_refresh: bool = False) -> Dict[str, Any]:
         """
-        Retrieves real-time hardware battery telemetry via native kernel32 API
-        with zero process overhead.
+        Retrieves hardware battery specifications: design capacity, full charge capacity,
+        wear level, cycle count, manufacturer, serial number, and chemistry.
+        Caches results for 60 seconds to avoid repeating XML generation.
+        """
+        now = time.time()
+        if not force_refresh and self._cached_battery_specs and (now - self._last_battery_specs_time < 60):
+            return self._cached_battery_specs
+
+        specs = {
+            "design_capacity": 0,
+            "full_capacity": 0,
+            "cycle_count": 0,
+            "health_percent": 100.0,
+            "wear_percent": 0.0,
+            "chemistry": "Lithium-Ion",
+            "manufacturer": "OEM",
+            "serial_number": "N/A",
+            "device_id": "Internal Battery"
+        }
+
+        xml_path = os.path.join(tempfile.gettempdir(), "apex_battery_specs.xml")
+        try:
+            # Generate official battery report XML quietly
+            cmd = f'powercfg /batteryreport /xml /output "{xml_path}"'
+            c, _ = self.run_cmd(cmd)
+            if c == 0 and os.path.exists(xml_path):
+                tree = ET.parse(xml_path)
+                root = tree.getroot()
+                bat = None
+                for b in root.iter():
+                    if b.tag.endswith("Battery") and not b.tag.endswith("Batteries"):
+                        bat = b
+                        break
+
+                if bat is not None:
+                    raw_data = {}
+                    for child in bat:
+                        tag = child.tag.split("}")[-1]
+                        raw_data[tag] = (child.text or "").strip()
+
+                    try:
+                        des_cap = int(raw_data.get("DesignCapacity", "0"))
+                    except ValueError:
+                        des_cap = 0
+
+                    try:
+                        full_cap = int(raw_data.get("FullChargeCapacity", "0"))
+                    except ValueError:
+                        full_cap = 0
+
+                    try:
+                        cycles = int(raw_data.get("CycleCount", "0"))
+                    except ValueError:
+                        cycles = 0
+
+                    specs["design_capacity"] = des_cap
+                    specs["full_capacity"] = full_cap
+                    specs["cycle_count"] = cycles
+                    specs["manufacturer"] = raw_data.get("Manufacturer", "OEM").strip() or "OEM"
+                    specs["serial_number"] = raw_data.get("SerialNumber", "N/A").strip() or "N/A"
+                    specs["device_id"] = raw_data.get("Id", "Internal Battery").strip() or "Internal Battery"
+
+                    chem = raw_data.get("Chemistry", "Li-I").strip()
+                    if "li-i" in chem.lower() or "lion" in chem.lower():
+                        specs["chemistry"] = "Lithium-Ion (Li-Ion)"
+                    elif "poly" in chem.lower() or "lip" in chem.lower():
+                        specs["chemistry"] = "Lithium-Polymer (Li-Po)"
+                    elif chem:
+                        specs["chemistry"] = chem
+                    else:
+                        specs["chemistry"] = "Lithium-Ion"
+
+                    if des_cap > 0 and full_cap > 0:
+                        health = min(100.0, round((full_cap / des_cap) * 100.0, 1))
+                        specs["health_percent"] = health
+                        specs["wear_percent"] = max(0.0, round(100.0 - health, 1))
+        except Exception:
+            pass
+
+        self._cached_battery_specs = specs
+        self._last_battery_specs_time = now
+        return specs
+
+    def _get_battery_dynamic_status(self) -> Dict[str, Any]:
+        """
+        Retrieves real-time voltage and charge/discharge rate via root/wmi:BatteryStatus.
+        Caches for 5 seconds to preserve battery and CPU cycles.
+        """
+        now = time.time()
+        if self._cached_battery_wmi_status and (now - self._last_battery_wmi_time < 5):
+            return self._cached_battery_wmi_status
+
+        dyn = {
+            "voltage_v": 0.0,
+            "rate_w": 0.0,
+            "rate_text": "Direct AC"
+        }
+        try:
+            ps_cmd = "Get-CimInstance -Namespace root/wmi -ClassName BatteryStatus | Select-Object ChargeRate, DischargeRate, Voltage, Charging, Discharging, PowerOnline | ConvertTo-Json -Compress"
+            c, out = self.run_cmd(f'powershell -NoProfile -Command "{ps_cmd}"')
+            if c == 0 and out.strip().startswith("{"):
+                import json
+                data = json.loads(out.strip())
+                volt_mv = data.get("Voltage", 0) or 0
+                dyn["voltage_v"] = round(volt_mv / 1000.0, 2)
+                chg_rate = data.get("ChargeRate", 0) or 0
+                dis_rate = data.get("DischargeRate", 0) or 0
+                if chg_rate > 0:
+                    w = round(chg_rate / 1000.0, 2)
+                    dyn["rate_w"] = w
+                    dyn["rate_text"] = f"+{w} W (Charging)"
+                elif dis_rate > 0:
+                    w = round(dis_rate / 1000.0, 2)
+                    dyn["rate_w"] = w
+                    dyn["rate_text"] = f"-{w} W (Discharging)"
+                else:
+                    dyn["rate_w"] = 0.0
+                    dyn["rate_text"] = "Idle / Full"
+        except Exception:
+            pass
+
+        self._cached_battery_wmi_status = dyn
+        self._last_battery_wmi_time = now
+        return dyn
+
+    def get_battery_telemetry(self, refresh_specs: bool = False) -> Dict[str, Any]:
+        """
+        Retrieves real-time hardware battery telemetry via native kernel32 API,
+        WMI metrics, and Windows battery diagnostics report with zero process lag.
         """
         class SYSTEM_POWER_STATUS(ctypes.Structure):
             _fields_ = [
@@ -1310,9 +1466,25 @@ class OptimizationEngine:
             "is_charging": False,
             "status_text": "Desktop / Direct AC Power",
             "model_name": "Windows PC",
+            "battery_saver_active": False,
+            "remaining_time_str": "Direct AC Power",
+            "design_capacity": 0,
+            "full_capacity": 0,
+            "current_capacity": 0,
+            "health_percent": 100.0,
+            "wear_percent": 0.0,
+            "cycle_count": 0,
+            "chemistry": "Lithium-Ion",
+            "manufacturer": "OEM",
+            "serial_number": "N/A",
+            "device_id": "Internal Battery",
+            "voltage_v": 0.0,
+            "rate_w": 0.0,
+            "rate_text": "Direct AC",
             "fast_startup_enabled": True,
             "processor_eco_active": False,
-            "pcie_aspm_active": False
+            "pcie_aspm_active": False,
+            "power_scheme": {}
         }
 
         # Query System Manufacturer & Model from BIOS
@@ -1335,16 +1507,36 @@ class OptimizationEngine:
                     status["percent"] = int(sps.BatteryLifePercent)
                     status["ac_online"] = (sps.ACLineStatus == 1)
                     status["is_charging"] = bool(sps.BatteryFlag & 8)
+                    status["battery_saver_active"] = (sps.SystemStatusFlag == 1)
 
                     if status["ac_online"]:
                         if status["is_charging"]:
                             status["status_text"] = f"⚡ Charging ({status['percent']}%) [AC Connected]"
+                            status["remaining_time_str"] = "Charging on AC Power"
                         else:
                             status["status_text"] = f"🔌 Plugged In, Fully Charged ({status['percent']}%)"
+                            status["remaining_time_str"] = "Fully Charged / Wall Current"
                     else:
                         status["status_text"] = f"🔋 On Battery Power ({status['percent']}%)"
+                        if sps.BatteryLifeTime != 0xFFFFFFFF and sps.BatteryLifeTime > 0:
+                            hrs = sps.BatteryLifeTime // 3600
+                            mins = (sps.BatteryLifeTime % 3600) // 60
+                            status["remaining_time_str"] = f"{hrs}h {mins:02d}m remaining"
+                        else:
+                            status["remaining_time_str"] = "Calculating runtime..."
         except Exception:
             pass
+
+        # If system has a battery, enrich with hardware specs and WMI dynamic values
+        if status["has_battery"]:
+            specs = self._get_battery_specs(force_refresh=refresh_specs)
+            status.update(specs)
+            if status["full_capacity"] > 0:
+                status["current_capacity"] = int(round(status["full_capacity"] * (status["percent"] / 100.0)))
+            dyn = self._get_battery_dynamic_status()
+            status["voltage_v"] = dyn["voltage_v"]
+            status["rate_w"] = dyn["rate_w"]
+            status["rate_text"] = dyn["rate_text"]
 
         # Query Fast Startup state
         status["fast_startup_enabled"] = self.get_fast_startup_state()

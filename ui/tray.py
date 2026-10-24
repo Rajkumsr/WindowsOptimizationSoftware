@@ -31,7 +31,7 @@ class ApexTrayManager:
             menu = pystray.Menu(
                 pystray.MenuItem("🟢 Open Apex Optimizer", self.on_open_app, default=True),
                 pystray.MenuItem("⚡ 1-Click Boost & Purge RAM", self.on_quick_boost),
-                pystray.MenuItem("🔋 Battery & Power Saver", self.on_open_battery),
+                pystray.MenuItem("🔋 Battery & Power", self.on_open_battery),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("❌ Exit Optimizer", self.on_exit)
             )

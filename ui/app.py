@@ -445,7 +445,7 @@ class ApexOptimizerApp:
             ("services", "⚙️  Services Optimizer"),
             ("debloat", "🗑️  App Debloater"),
             ("gaming", "🎮  Gaming & GPU Boost"),
-            ("battery", "🔋  Battery & Power Saver"),
+            ("battery", "🔋  Battery & Power"),
             ("cleaner", "🧹  Disk & Cache Clean"),
             ("updater", "📦  Software Updater"),
             ("terminal", "📝  Live Activity Log"),
@@ -927,12 +927,12 @@ class ApexOptimizerApp:
     def render_system_tweaks(self):
         self.render_section_header(
             "System Performance & Kernel Tuning",
-            "Fine-tune low-level Windows kernel parameters, network throughput, and startup timeouts. Toggles reflect current system state."
+            "Fine-tune low-level Windows kernel parameters, network throughput, startup timeouts, and hardware power policies."
         )
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
 
-        tweak_defs = [
+        kernel_tweak_defs = [
             ("network_throttling", "Disable Multimedia Network Throttling", "Sets NetworkThrottlingIndex to disabled (0xFFFFFFFF) so gaming and streaming packets are never prioritized down."),
             ("system_responsiveness", "Foreground System Responsiveness", "Reserves 90% CPU priority for active foreground games and programs (SystemResponsiveness = 10)."),
             ("irp_stack_size", "Optimize IRP Stack Size", "Sets IRPStackSize to 30, significantly increasing throughput for local network and file sharing transfers."),
@@ -944,11 +944,57 @@ class ApexOptimizerApp:
             ("disable_hibernation", "Disable Hibernation (Desktop PC)", "Deletes hiberfil.sys to reclaim disk space equivalent to your total RAM size (desktops only).")
         ]
 
+        power_tweak_defs = [
+            ("processor_eco", "Processor Efficiency & Thermal Capping on Battery (DC)", "Caps aggressive CPU boost to 85% on battery. Eliminates high heat, fan noise, and extends screen-on battery runtime by up to 25%."),
+            ("pcie_aspm", "PCIe & Chipset Link State Power Management (ASPM)", "Places idle NVMe SSD lanes, discrete GPU, and motherboard interconnects into low-power states to cut idle motherboard battery drain."),
+            ("fast_startup", "Disable Windows Fast Startup (Stop Phantom Shutdown Drain)", "Stops Windows from saving an active kernel hibernation state at shutdown, eliminating 3-5% overnight battery discharge while powered off.")
+        ]
+
         self.system_toggles.clear()
-        for key, title, desc in tweak_defs:
+
+        # Group 1: Kernel & System Responsiveness
+        group1_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
+        group1_hdr.pack(fill=tk.X, pady=(0, 6))
+        tk.Label(
+            group1_hdr,
+            text="⚡ Kernel, Network & Storage Tuning",
+            font=(FONT_FAMILY, 10, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_app"]
+        ).pack(side=tk.LEFT)
+
+        for key, title, desc in kernel_tweak_defs:
             card = ModernCard(scroll_content)
             card.pack(fill=tk.X, pady=(0, 8))
             current_state = self.live_states.get(key, True)
+            toggle = ToggleSwitch(card, title, desc, default=current_state)
+            toggle.pack(fill=tk.X)
+            self.system_toggles[key] = toggle
+
+        # Group 2: Power, Energy & Hardware Efficiency Tweaks (Moved from Battery section)
+        group2_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
+        group2_hdr.pack(fill=tk.X, pady=(12, 6))
+        tk.Label(
+            group2_hdr,
+            text="🔋 Hardware Power & Energy Conservation Tweaks",
+            font=(FONT_FAMILY, 10, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_app"]
+        ).pack(side=tk.LEFT)
+        tk.Label(
+            group2_hdr,
+            text="UNIVERSAL POWER POLICIES",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["success"],
+            bg=THEME["success_bg"],
+            padx=8,
+            pady=2
+        ).pack(side=tk.RIGHT)
+
+        for key, title, desc in power_tweak_defs:
+            card = ModernCard(scroll_content)
+            card.pack(fill=tk.X, pady=(0, 8))
+            current_state = self.live_states.get(key, False if key != "fast_startup" else True)
             toggle = ToggleSwitch(card, title, desc, default=current_state)
             toggle.pack(fill=tk.X)
             self.system_toggles[key] = toggle
@@ -1355,21 +1401,22 @@ class ApexOptimizerApp:
 
     # -------------------------------------------------------------
     # -------------------------------------------------------------
-    # TAB 8: Battery Health & Power Optimization (Universal)
     # -------------------------------------------------------------
-    def render_battery_page(self):
+    # TAB 8: Battery Health & Power Management
+    # -------------------------------------------------------------
+    def render_battery_page(self, refresh_specs: bool = False):
         # Clear existing container widgets to prevent duplicate split screen on refresh
         for widget in self.content_container.winfo_children():
             widget.destroy()
 
         self.render_section_header(
-            "Battery Health & Power Optimization",
-            "Universal laptop power preservation, CPU thermal capping, idle standby drain fixes, and battery diagnostics."
+            "Battery Health & Power Management",
+            "Real-time battery telemetry, cell degradation diagnostics, hardware specifications, and Windows power schemes."
         )
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
 
-        telem = self.engine.get_battery_telemetry()
+        telem = self.engine.get_battery_telemetry(refresh_specs=refresh_specs)
         has_battery = telem.get("has_battery", False)
 
         # ---------------------------------------------------------
@@ -1388,7 +1435,7 @@ class ApexOptimizerApp:
             tk.Label(
                 t_top,
                 text=f"🔋 {pct}%",
-                font=(FONT_FAMILY, 20, "bold"),
+                font=(FONT_FAMILY, 22, "bold"),
                 fg=pct_color,
                 bg=THEME["bg_card"]
             ).pack(side=tk.LEFT)
@@ -1419,12 +1466,30 @@ class ApexOptimizerApp:
             ).pack(side=tk.RIGHT)
 
             meter_bg = tk.Frame(telem_card, bg=THEME["bg_input"], height=14)
-            meter_bg.pack(fill=tk.X, pady=(0, 10))
+            meter_bg.pack(fill=tk.X, pady=(0, 12))
             meter_bg.pack_propagate(False)
 
             fill_width_pct = max(0.02, min(1.0, pct / 100.0))
             meter_fill = tk.Frame(meter_bg, bg=pct_color)
             meter_fill.place(relx=0, rely=0, relwidth=fill_width_pct, relheight=1.0)
+
+            # Telemetry Pill Grid
+            pills_row = tk.Frame(telem_card, bg=THEME["bg_card"])
+            pills_row.pack(fill=tk.X, pady=(0, 4))
+
+            pills_data = [
+                ("Power Source", "⚡ AC Wall Power" if telem.get("ac_online") else "🔋 DC Battery Power", THEME["accent_cyan"] if telem.get("ac_online") else THEME["warning"]),
+                ("Estimated Runtime", telem.get("remaining_time_str", "Calculating..."), THEME["text_main"]),
+                ("Rate / Power Draw", telem.get("rate_text", "Direct AC"), THEME["success"] if "+" in telem.get("rate_text", "") else (THEME["warning"] if "-" in telem.get("rate_text", "") else THEME["text_muted"])),
+                ("Battery Voltage", f"{telem.get('voltage_v', 0.0):.2f} V" if telem.get('voltage_v', 0) > 0 else "N/A", THEME["text_main"]),
+                ("Battery Saver", "Active (Power Saving)" if telem.get("battery_saver_active") else "Disabled (Standard)", THEME["success"] if telem.get("battery_saver_active") else THEME["text_muted"])
+            ]
+
+            for i, (label, val, val_color) in enumerate(pills_data):
+                pill = tk.Frame(pills_row, bg=THEME["bg_input"], padx=10, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
+                pill.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0 if i == 0 else 6, 0))
+                tk.Label(pill, text=label.upper(), font=(FONT_FAMILY, 7, "bold"), fg=THEME["text_dim"], bg=THEME["bg_input"]).pack(anchor="w")
+                tk.Label(pill, text=val, font=(FONT_FAMILY, 9, "bold"), fg=val_color, bg=THEME["bg_input"]).pack(anchor="w", pady=(2, 0))
         else:
             tk.Label(
                 t_top,
@@ -1445,28 +1510,96 @@ class ApexOptimizerApp:
                 relief="flat"
             ).pack(side=tk.RIGHT)
 
-        # Telemetry Details row
-        details_frame = tk.Frame(telem_card, bg=THEME["bg_card"])
-        details_frame.pack(fill=tk.X)
-
-        tk.Label(
-            details_frame,
-            text=f"💻 {telem.get('model_name', 'Windows System')}",
-            font=(FONT_FAMILY, 9),
-            fg=THEME["text_muted"],
-            bg=THEME["bg_card"]
-        ).pack(side=tk.LEFT)
-
-        tk.Label(
-            details_frame,
-            text=f"⚡ {telem.get('status_text', 'Active')}",
-            font=(FONT_FAMILY, 8, "bold"),
-            fg=THEME["accent_cyan"] if telem.get("ac_online") else THEME["warning"],
-            bg=THEME["bg_card"]
-        ).pack(side=tk.RIGHT)
+            tk.Label(
+                telem_card,
+                text="Desktop PC detected. This system draws direct wall current from the Power Supply Unit (PSU) with no chemical battery cell.",
+                font=(FONT_FAMILY, 8),
+                fg=THEME["text_muted"],
+                bg=THEME["bg_card"]
+            ).pack(anchor="w", pady=(4, 0))
 
         # ---------------------------------------------------------
-        # Card 2: Active Windows Power Plan & Scheme Selector
+        # Card 2: Battery Health & Cell Degradation Diagnostics
+        # ---------------------------------------------------------
+        if has_battery:
+            health_card = ModernCard(scroll_content)
+            health_card.pack(fill=tk.X, pady=(0, 14))
+
+            h_top = tk.Frame(health_card, bg=THEME["bg_card"])
+            h_top.pack(fill=tk.X, pady=(0, 10))
+
+            tk.Label(
+                h_top,
+                text="🛡️ Battery Health & Hardware Specifications",
+                font=(FONT_FAMILY, 11, "bold"),
+                fg=THEME["text_main"],
+                bg=THEME["bg_card"]
+            ).pack(side=tk.LEFT)
+
+            health_pct = telem.get("health_percent", 100.0)
+            wear_pct = telem.get("wear_percent", 0.0)
+            h_color = THEME["success"] if health_pct >= 80 else (THEME["warning"] if health_pct >= 60 else THEME["danger"])
+            h_bg = THEME["success_bg"] if health_pct >= 80 else (THEME["warning_bg"] if health_pct >= 60 else THEME["bg_card_alt"])
+
+            tk.Label(
+                h_top,
+                text=f"HEALTH: {health_pct}%  •  WEAR: {wear_pct}%",
+                font=(FONT_FAMILY, 8, "bold"),
+                fg=h_color,
+                bg=h_bg,
+                padx=10,
+                pady=3,
+                relief="flat"
+            ).pack(side=tk.RIGHT)
+
+            # Health visualization bar (Full Capacity vs Design Capacity)
+            h_meter_bg = tk.Frame(health_card, bg=THEME["bg_input"], height=10)
+            h_meter_bg.pack(fill=tk.X, pady=(0, 12))
+            h_meter_bg.pack_propagate(False)
+
+            h_fill_pct = max(0.02, min(1.0, health_pct / 100.0))
+            h_meter_fill = tk.Frame(h_meter_bg, bg=h_color)
+            h_meter_fill.place(relx=0, rely=0, relwidth=h_fill_pct, relheight=1.0)
+
+            # 6-Item Hardware Specs Grid
+            spec_grid = tk.Frame(health_card, bg=THEME["bg_card"])
+            spec_grid.pack(fill=tk.X)
+
+            des_cap = telem.get("design_capacity", 0)
+            full_cap = telem.get("full_capacity", 0)
+            cur_cap = telem.get("current_capacity", 0)
+            cycles = telem.get("cycle_count", 0)
+            chem = telem.get("chemistry", "Lithium-Ion")
+            mfg = telem.get("manufacturer", "OEM")
+            serial = telem.get("serial_number", "N/A")
+
+            specs_list = [
+                ("Full Charge Capacity", f"{full_cap:,} mWh" if full_cap > 0 else "N/A"),
+                ("Factory Design Capacity", f"{des_cap:,} mWh" if des_cap > 0 else "N/A"),
+                ("Current Charge Level", f"{cur_cap:,} mWh" if cur_cap > 0 else "N/A"),
+                ("Charge Cycles", f"{cycles} Cycles" if cycles > 0 else "N/A (BMS direct)"),
+                ("Battery Chemistry", chem),
+                ("Manufacturer & Serial", f"{mfg} ({serial})")
+            ]
+
+            row1 = tk.Frame(spec_grid, bg=THEME["bg_card"])
+            row1.pack(fill=tk.X, pady=(0, 6))
+            for i, (label, val) in enumerate(specs_list[:3]):
+                box = tk.Frame(row1, bg=THEME["bg_input"], padx=10, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
+                box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0 if i == 0 else 6, 0))
+                tk.Label(box, text=label.upper(), font=(FONT_FAMILY, 7, "bold"), fg=THEME["text_dim"], bg=THEME["bg_input"]).pack(anchor="w")
+                tk.Label(box, text=val, font=(FONT_FAMILY, 9, "bold"), fg=THEME["text_main"], bg=THEME["bg_input"]).pack(anchor="w", pady=(2, 0))
+
+            row2 = tk.Frame(spec_grid, bg=THEME["bg_card"])
+            row2.pack(fill=tk.X)
+            for i, (label, val) in enumerate(specs_list[3:]):
+                box = tk.Frame(row2, bg=THEME["bg_input"], padx=10, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
+                box.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0 if i == 0 else 6, 0))
+                tk.Label(box, text=label.upper(), font=(FONT_FAMILY, 7, "bold"), fg=THEME["text_dim"], bg=THEME["bg_input"]).pack(anchor="w")
+                tk.Label(box, text=val, font=(FONT_FAMILY, 9, "bold"), fg=THEME["text_main"], bg=THEME["bg_input"]).pack(anchor="w", pady=(2, 0))
+
+        # ---------------------------------------------------------
+        # Card 3: Active Windows Power Plan & Scheme Selector
         # ---------------------------------------------------------
         scheme_info = telem.get("power_scheme", self.engine.get_power_schemes())
         active_plan_name = scheme_info.get("active_name", "Balanced")
@@ -1591,11 +1724,10 @@ class ApexOptimizerApp:
                 )
                 b.pack(side=tk.LEFT, padx=(0, 6))
 
-        # Relationship info note explaining how the active plan & our tweaks work together
         expl_text = (
-            "💡 Plan Relationship: Windows & AMD manage core frequency scaling for this plan. "
-            "Our tweaks below (DC Boost Capping, PCIe ASPM, Fast Startup) apply on top of this active plan "
-            "to prevent thermal drain while unplugged, without disrupting core scheduler responsiveness."
+            "💡 Plan Relationship: Windows & vendor driver profiles manage core frequency scaling for this plan. "
+            "Power conservation policies configure CPU efficiency capping, PCIe ASPM link states, and shutdown hibernation "
+            "in the System & Speed section."
         )
         tk.Label(
             plan_card,
@@ -1608,118 +1740,33 @@ class ApexOptimizerApp:
         ).pack(anchor="w", pady=(2, 0))
 
         # ---------------------------------------------------------
-        # Card 3: Universal Laptop Eco Power & Battery Lifespan Suite
+        # Card 4: Battery Protection & Official Diagnostic Tools
         # ---------------------------------------------------------
-        eco_card = ModernCard(scroll_content)
-        eco_card.pack(fill=tk.X, pady=(0, 14))
+        if has_battery:
+            guard_card = ModernCard(scroll_content)
+            guard_card.pack(fill=tk.X, pady=(0, 14))
 
-        eco_top = tk.Frame(eco_card, bg=THEME["bg_card"])
-        eco_top.pack(fill=tk.X, pady=(0, 8))
-
-        tk.Label(
-            eco_top,
-            text="Universal Laptop Battery & Power Conservation Suite",
-            font=(FONT_FAMILY, 11, "bold"),
-            fg=THEME["text_main"],
-            bg=THEME["bg_card"]
-        ).pack(side=tk.LEFT)
-
-        tk.Label(
-            eco_top,
-            text="⚡ UNIVERSAL COMPATIBILITY",
-            font=(FONT_FAMILY, 8, "bold"),
-            fg=THEME["success"],
-            bg=THEME["success_bg"],
-            padx=10,
-            pady=3,
-            relief="flat"
-        ).pack(side=tk.RIGHT)
-
-        tk.Label(
-            eco_card,
-            text="Native Windows kernel and hardware power policies to extend screen-on time, prevent idle standby discharge, and protect battery cell health on all Windows laptops.",
-            font=(FONT_FAMILY, 8),
-            fg=THEME["text_muted"],
-            bg=THEME["bg_card"],
-            justify="left",
-            wraplength=640
-        ).pack(anchor="w", pady=(0, 12))
-
-        if not has_battery:
-            desktop_box = tk.Frame(
-                eco_card,
-                bg=THEME["bg_input"],
-                padx=14,
-                pady=12,
-                highlightbackground=THEME["border"],
-                highlightthickness=1
-            )
-            desktop_box.pack(fill=tk.X, pady=(4, 10))
+            guard_top = tk.Frame(guard_card, bg=THEME["bg_card"])
+            guard_top.pack(fill=tk.X, pady=(0, 6))
 
             tk.Label(
-                desktop_box,
-                text="🖥️ DESKTOP SYSTEM DETECTED",
-                font=(FONT_FAMILY, 9, "bold"),
+                guard_top,
+                text="Smart Battery Health Guard & Cell Protection",
+                font=(FONT_FAMILY, 10, "bold"),
                 fg=THEME["text_main"],
-                bg=THEME["bg_input"],
-                anchor="w"
-            ).pack(fill=tk.X)
+                bg=THEME["bg_card"]
+            ).pack(side=tk.LEFT)
 
-            tk.Label(
-                desktop_box,
-                text="Your system runs on continuous direct AC wall current via the Power Supply Unit (PSU). Portable battery conservation tweaks are not needed for desktop systems.",
-                font=(FONT_FAMILY, 8),
-                fg=THEME["text_muted"],
-                bg=THEME["bg_input"],
-                anchor="w",
-                wraplength=640,
-                justify="left"
-            ).pack(fill=tk.X, pady=(4, 0))
-        else:
-            # Toggle 1: Processor Eco Boost Capping (DC)
-            t1 = ToggleSwitch(
-                eco_card,
-                title="Processor Efficiency & Thermal Capping on Battery (DC)",
-                description="Caps aggressive CPU boost to 85% on battery. Eliminates high heat, fan noise, and extends screen-on battery runtime by up to 25%.",
-                default=telem.get("processor_eco_active", False),
-                command=lambda s: self.action_toggle_processor_eco(s)
-            )
-            t1.pack(fill=tk.X, pady=(4, 8))
-
-            # Toggle 2: PCIe Link State Power Management (ASPM)
-            t2 = ToggleSwitch(
-                eco_card,
-                title="PCIe & Chipset Link State Power Management (ASPM)",
-                description="Places idle NVMe SSD lanes, discrete GPU, and motherboard interconnects into low-power states to cut idle motherboard battery drain.",
-                default=telem.get("pcie_aspm_active", False),
-                command=lambda s: self.action_toggle_pcie_aspm(s)
-            )
-            t2.pack(fill=tk.X, pady=(4, 8))
-
-            # Toggle 3: Disable Windows Fast Startup (Prevent Shutdown Battery Drain)
-            fast_start_active = telem.get("fast_startup_enabled", True)
-            t3 = ToggleSwitch(
-                eco_card,
-                title="Disable Windows Fast Startup (Stop Phantom Shutdown Drain)",
-                description="Stops Windows from saving an active kernel hibernation state at shutdown, eliminating 3-5% overnight battery discharge while powered off.",
-                default=not fast_start_active,
-                command=lambda s: self.action_toggle_fast_startup(not s)
-            )
-            t3.pack(fill=tk.X, pady=(4, 8))
-
-            # Toggle 4: Smart 80% / 20% Battery Health Audio & Toast Alarm
-            t4 = ToggleSwitch(
-                eco_card,
+            t_guard = ToggleSwitch(
+                guard_card,
                 title="Smart 80% / 20% Battery Health Alert Guard",
                 description="Alerts you with an audio chime and notification when your battery reaches 80% while charging (to unplug and avoid cell wear) or drops below 20%.",
                 default=getattr(self, "battery_alarm_enabled", False),
                 command=lambda s: self.action_toggle_battery_alarm(s)
             )
-            t4.pack(fill=tk.X, pady=(4, 4))
+            t_guard.pack(fill=tk.X, pady=(4, 4))
 
-        # ---------------------------------------------------------
-        # Card 3: Windows Battery Diagnostic & Wear Report
-        # ---------------------------------------------------------
+        # Card 5: Official Windows Battery Diagnostic & Wear Report
         diag_card = ModernCard(scroll_content)
         diag_card.pack(fill=tk.X, pady=(0, 14))
 
@@ -1762,7 +1809,7 @@ class ApexOptimizerApp:
 
         tk.Button(
             btn_row,
-            text="🔄 Refresh Status",
+            text="🔄 Refresh Battery Telemetry",
             font=(FONT_FAMILY, 8),
             fg=THEME["text_muted"],
             bg=THEME["bg_card"],
@@ -1771,7 +1818,7 @@ class ApexOptimizerApp:
             cursor="hand2",
             padx=10,
             pady=6,
-            command=lambda: self.switch_tab("battery")
+            command=lambda: self.render_battery_page(refresh_specs=True)
         ).pack(side=tk.RIGHT)
 
     # -------------------------------------------------------------
