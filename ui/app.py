@@ -1353,27 +1353,120 @@ class ApexOptimizerApp:
         ).pack(side=tk.RIGHT)
 
     # -------------------------------------------------------------
+    # -------------------------------------------------------------
     # TAB 7: Gaming & GPU Boost
     # -------------------------------------------------------------
-    def render_gaming_boost(self):
+    def render_gaming_boost(self, refresh_gpu: bool = False):
         self.render_section_header(
             "Gaming & GPU Performance Boost",
-            "Unlock ultra-low input latency, dedicated multimedia priority, and maximum hardware clocks. Toggles reflect current state."
+            "Unlock ultra-low input latency, dedicated multimedia priority, maximum hardware clocks, and real-time GPU/fan monitoring."
         )
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
 
-        tweak_defs = [
-            ("mmcss_priority", "MMCSS Multimedia Priority (Games & Audio)", "Configures GPU Priority = 8, Priority = 6, and Scheduling Category = High for ultra-smooth frame delivery."),
+        gpu_info = self.engine.get_gpu_telemetry(force_refresh=refresh_gpu)
+
+        # ---------------------------------------------------------
+        # Card 1: Live GPU & Display Hardware Telemetry
+        # ---------------------------------------------------------
+        gpu_card = ModernCard(scroll_content)
+        gpu_card.pack(fill=tk.X, pady=(0, 14))
+
+        g_top = tk.Frame(gpu_card, bg=THEME["bg_card"])
+        g_top.pack(fill=tk.X, pady=(0, 8))
+
+        tk.Label(
+            g_top,
+            text=f"🎮  {gpu_info.get('name', 'Graphics Processor')}",
+            font=(FONT_FAMILY, 12, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT)
+
+        tag_text = "⚡ DISCRETE GPU" if gpu_info.get("is_discrete") else "⚡ ACTIVE GRAPHICS"
+        tk.Label(
+            g_top,
+            text=tag_text,
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["accent_cyan"],
+            bg=THEME["bg_card_alt"],
+            padx=10,
+            pady=3,
+            relief="flat"
+        ).pack(side=tk.RIGHT)
+
+        # Display & Hardware Specs Sub-line
+        res_str = gpu_info.get("resolution", "1920 × 1080")
+        hz_val = gpu_info.get("refresh_rate", 60)
+        vram_str = gpu_info.get("vram_str", "Shared VRAM")
+
+        tk.Label(
+            gpu_card,
+            text=f"🖥️ Display: {res_str} @ {hz_val} Hz   •   📁 Memory: {vram_str}",
+            font=(FONT_FAMILY, 9),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"]
+        ).pack(anchor="w", pady=(0, 10))
+
+        # 3 Metric Tiles (Fan Speed with 🪭 symbol, Driver Version, Architecture)
+        tiles_row = tk.Frame(gpu_card, bg=THEME["bg_card"])
+        tiles_row.pack(fill=tk.X)
+
+        tiles_data = [
+            ("🪭 FAN SPEED / COOLING", gpu_info.get("fan_speed_str", "🪭 Active Dynamic Flow"), THEME["accent_cyan"]),
+            ("GPU DRIVER VERSION", gpu_info.get("driver_version", "N/A"), THEME["text_main"]),
+            ("PROCESSOR ARCHITECTURE", gpu_info.get("video_processor", "Hardware GPU"), THEME["text_muted"])
+        ]
+
+        for i, (label, val, val_col) in enumerate(tiles_data):
+            tile = tk.Frame(tiles_row, bg=THEME["bg_input"], padx=10, pady=8, highlightbackground=THEME["border"], highlightthickness=1)
+            tile.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0 if i == 0 else 8, 0))
+            tk.Label(tile, text=label, font=(FONT_FAMILY, 7, "bold"), fg=THEME["text_dim"], bg=THEME["bg_input"]).pack(anchor="w")
+            tk.Label(tile, text=val, font=(FONT_FAMILY, 9, "bold"), fg=val_col, bg=THEME["bg_input"]).pack(anchor="w", pady=(2, 0))
+
+        # ---------------------------------------------------------
+        # Group 1: Core Graphics & Driver Tuning
+        # ---------------------------------------------------------
+        gfx_tweak_defs = [
             ("enable_hags", "Hardware-Accelerated GPU Scheduling (HAGS)", "Passes memory scheduling directly to GPU VRAM for reduced latency (reboot required)."),
             ("windowed_optimizations", "Optimizations for Windowed Games", "Enables the modern flip model presentation for DirectX 10/11 windowed games."),
+            ("mmcss_priority", "MMCSS Multimedia Priority (Games & Audio)", "Configures GPU Priority = 8, Priority = 6, and Scheduling Category = High for ultra-smooth frame delivery.")
+        ]
+
+        # ---------------------------------------------------------
+        # Group 2: Latency, Anti-Stutter & Input Response
+        # ---------------------------------------------------------
+        latency_tweak_defs = [
+            ("disable_gamedvr", "Disable Xbox Game Bar & DVR Background Recording", "Stops continuous 60 FPS background recording from consuming GPU encoder bandwidth, VRAM, and disk I/O."),
+            ("enable_game_mode", "Enable Windows Native Game Mode", "Prioritizes CPU and GPU resources for active game processes and halts background Windows updates."),
+            ("disable_mouse_acceleration", "Disable Mouse Pointer Acceleration (1:1 Raw Input)", "Disables Windows 'Enhanced Pointer Precision' for true 1:1 muscle memory mouse tracking in competitive games."),
+            ("network_gaming_latency", "Lower Gaming Ping (Disable Nagle's Algorithm)", "Disables packet buffering delay on network adapters (TcpAckFrequency & TCPNoDelay) for lower ping in online games."),
             ("reset_hpet", "Reset HPET Override Timer Dependency", "Removes explicit useplatformclock overrides, fixing micro-stuttering and timer desync."),
             ("disable_power_throttling", "Disable CPU Power Throttling", "Prevents Windows power throttling from lowering CPU frequencies under intense gaming loads (Desktop)."),
             ("ultimate_performance", "Unlock Ultimate Performance Power Scheme", "Duplicates and activates Windows' hidden Ultimate Performance power plan for 0% latency throttling.")
         ]
 
         self.gaming_toggles.clear()
-        for key, title, desc in tweak_defs:
+
+        # Render Group 1
+        g1_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
+        g1_hdr.pack(fill=tk.X, pady=(12, 6))
+        tk.Label(g1_hdr, text="⚡ Core Graphics & Driver Tuning", font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_app"]).pack(side=tk.LEFT)
+
+        for key, title, desc in gfx_tweak_defs:
+            card = ModernCard(scroll_content)
+            card.pack(fill=tk.X, pady=(0, 8))
+            current_state = self.live_states.get(key, True)
+            toggle = ToggleSwitch(card, title, desc, default=current_state)
+            toggle.pack(fill=tk.X)
+            self.gaming_toggles[key] = toggle
+
+        # Render Group 2
+        g2_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
+        g2_hdr.pack(fill=tk.X, pady=(12, 6))
+        tk.Label(g2_hdr, text="🎯 Input Latency, Anti-Stutter & Frame-Drop Prevention", font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_app"]).pack(side=tk.LEFT)
+
+        for key, title, desc in latency_tweak_defs:
             card = ModernCard(scroll_content)
             card.pack(fill=tk.X, pady=(0, 8))
             current_state = self.live_states.get(key, True)

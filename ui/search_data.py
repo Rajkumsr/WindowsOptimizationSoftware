@@ -35,6 +35,10 @@ ALL_SEARCHABLE_TWEAKS = [
     ("power_throttling", "gaming", "Disable Execution Power Throttling", "Prevents Windows from downclocking background CPU cores during games."),
     ("ultimate_performance", "gaming", "Activate Ultimate Performance Power Scheme", "Activates Windows' hidden latency-free power plan."),
     ("hpet_reset", "gaming", "Reset High Precision Event Timer (HPET)", "Removes explicit timer overrides to prevent micro-stuttering."),
+    ("disable_gamedvr", "gaming", "Disable Xbox Game Bar & Background DVR", "Stops 60fps background video recording from consuming GPU encoder cycles and disk throughput."),
+    ("enable_game_mode", "gaming", "Enable Windows Native Game Mode", "Prioritizes CPU and GPU resources for active game processes and halts background updates."),
+    ("disable_mouse_acceleration", "gaming", "Disable Mouse Pointer Acceleration (1:1 Input)", "Disables Windows Enhanced Pointer Precision for true 1:1 raw mouse tracking in competitive games."),
+    ("network_gaming_latency", "gaming", "Lower Gaming Ping (Disable Nagle's Algorithm)", "Eliminates network packet buffering delay for instantaneous packet delivery in online games."),
     ("processor_eco", "system", "Processor Eco Boost Capping on Battery", "Limits CPU turbo boost to 85% on battery to eliminate thermal spikes and extend runtime."),
     ("pcie_aspm", "system", "PCIe Link State Power Management (ASPM)", "Puts idle PCIe lanes into maximum power savings on DC power."),
     ("fast_startup", "system", "Disable Windows Fast Startup", "Stops hybrid kernel hibernation and eliminates 3-5% overnight battery discharge.")
