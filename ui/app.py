@@ -1466,7 +1466,149 @@ class ApexOptimizerApp:
         ).pack(side=tk.RIGHT)
 
         # ---------------------------------------------------------
-        # Card 2: Universal Laptop Eco Power & Battery Lifespan Suite
+        # Card 2: Active Windows Power Plan & Scheme Selector
+        # ---------------------------------------------------------
+        scheme_info = telem.get("power_scheme", self.engine.get_power_schemes())
+        active_plan_name = scheme_info.get("active_name", "Balanced")
+        active_plan_guid = scheme_info.get("active_guid", "")
+        is_ryzen = scheme_info.get("is_ryzen", False)
+
+        plan_card = ModernCard(scroll_content)
+        plan_card.pack(fill=tk.X, pady=(0, 14))
+
+        plan_top = tk.Frame(plan_card, bg=THEME["bg_card"])
+        plan_top.pack(fill=tk.X, pady=(0, 6))
+
+        tk.Label(
+            plan_top,
+            text="⚡  Active Windows Power Plan",
+            font=(FONT_FAMILY, 11, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT)
+
+        if is_ryzen:
+            plan_tag_text = "🔥 AMD RYZEN™ CPPC TUNED (1ms Clock Response)"
+            plan_tag_fg = "#FFFFFF"
+            plan_tag_bg = "#D9381E"
+        elif "ultimate" in active_plan_name.lower():
+            plan_tag_text = "🚀 ULTIMATE PERFORMANCE"
+            plan_tag_fg = THEME["primary"]
+            plan_tag_bg = THEME["bg_card_alt"]
+        elif "high" in active_plan_name.lower():
+            plan_tag_text = "⚡ HIGH PERFORMANCE"
+            plan_tag_fg = THEME["warning"]
+            plan_tag_bg = THEME["warning_bg"]
+        else:
+            plan_tag_text = "⚖️ BALANCED (Default Windows Power Allocation)"
+            plan_tag_fg = THEME["success"]
+            plan_tag_bg = THEME["success_bg"]
+
+        tk.Label(
+            plan_top,
+            text=plan_tag_text,
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=plan_tag_fg,
+            bg=plan_tag_bg,
+            padx=10,
+            pady=3,
+            relief="flat"
+        ).pack(side=tk.RIGHT)
+
+        plan_content_row = tk.Frame(plan_card, bg=THEME["bg_card"])
+        plan_content_row.pack(fill=tk.X, pady=(4, 8))
+
+        # Main active plan display
+        plan_display = tk.Frame(plan_content_row, bg=THEME["bg_input"], padx=14, pady=10, highlightbackground=THEME["border"], highlightthickness=1)
+        plan_display.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 10))
+
+        tk.Label(
+            plan_display,
+            text=active_plan_name,
+            font=(FONT_FAMILY, 12, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_input"]
+        ).pack(anchor="w")
+
+        tk.Label(
+            plan_display,
+            text=f"GUID: {active_plan_guid}",
+            font=(FONT_FAMILY, 7),
+            fg=THEME["text_dim"],
+            bg=THEME["bg_input"]
+        ).pack(anchor="w", pady=(2, 0))
+
+        # Quick Scheme Switcher Buttons (if multiple schemes installed)
+        all_schemes = scheme_info.get("all_schemes", [])
+        if len(all_schemes) > 1:
+            switch_box = tk.Frame(plan_content_row, bg=THEME["bg_card"])
+            switch_box.pack(side=tk.RIGHT)
+
+            tk.Label(
+                switch_box,
+                text="SWITCH PLAN:",
+                font=(FONT_FAMILY, 7, "bold"),
+                fg=THEME["text_dim"],
+                bg=THEME["bg_card"]
+            ).pack(anchor="w", pady=(0, 4))
+
+            btn_row = tk.Frame(switch_box, bg=THEME["bg_card"])
+            btn_row.pack(fill=tk.X)
+
+            for s in all_schemes:
+                s_name = s["name"]
+                s_guid = s["guid"]
+                s_active = s["is_active"]
+
+                btn_title = s_name.replace("AMD Ryzen™ ", "Ryzen ")
+                btn_bg = THEME["primary"] if s_active else THEME["bg_card_alt"]
+                btn_fg = "#FFFFFF" if s_active else THEME["text_muted"]
+
+                def make_switch_handler(target_guid=s_guid, target_name=s_name):
+                    def handler():
+                        def worker():
+                            self.set_status(f"Activating {target_name}...", is_busy=True)
+                            ok, msg = self.engine.set_active_power_scheme(target_guid)
+                            self.set_status(f"{target_name} active.", is_busy=False)
+                            self.root.after(0, lambda: self.show_toast("Power Scheme Switched", f"Active plan is now: {target_name}", "success"))
+                            self.root.after(0, self.render_battery_page)
+                        threading.Thread(target=worker, daemon=True).start()
+                    return handler
+
+                b = tk.Button(
+                    btn_row,
+                    text=f"{'● ' if s_active else ''}{btn_title}",
+                    font=(FONT_FAMILY, 8, "bold" if s_active else "normal"),
+                    fg=btn_fg,
+                    bg=btn_bg,
+                    activebackground=THEME["primary_hover"],
+                    activeforeground="#FFFFFF",
+                    relief="flat",
+                    cursor="hand2",
+                    padx=10,
+                    pady=4,
+                    command=make_switch_handler()
+                )
+                b.pack(side=tk.LEFT, padx=(0, 6))
+
+        # Relationship info note explaining how the active plan & our tweaks work together
+        expl_text = (
+            "💡 Plan Relationship: Windows & AMD manage core frequency scaling for this plan. "
+            "Our tweaks below (DC Boost Capping, PCIe ASPM, Fast Startup) apply on top of this active plan "
+            "to prevent thermal drain while unplugged, without disrupting core scheduler responsiveness."
+        )
+        tk.Label(
+            plan_card,
+            text=expl_text,
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"],
+            justify="left",
+            wraplength=760
+        ).pack(anchor="w", pady=(2, 0))
+
+        # ---------------------------------------------------------
+        # Card 3: Universal Laptop Eco Power & Battery Lifespan Suite
         # ---------------------------------------------------------
         eco_card = ModernCard(scroll_content)
         eco_card.pack(fill=tk.X, pady=(0, 14))

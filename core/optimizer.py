@@ -13,6 +13,7 @@ import ctypes
 import shutil
 import tempfile
 import threading
+import re
 from datetime import datetime
 from typing import Callable, Dict, List, Optional, Tuple, Any
 
@@ -1352,7 +1353,62 @@ class OptimizationEngine:
         status["processor_eco_active"] = self.get_processor_eco_state()
         status["pcie_aspm_active"] = self.get_pcie_aspm_state()
 
+        # Query active and installed Windows Power Schemes
+        status["power_scheme"] = self.get_power_schemes()
+
         return status
+
+    def get_power_schemes(self) -> Dict[str, Any]:
+        """
+        Retrieves all registered Windows power schemes and the currently active plan.
+        Detects custom vendor plans like AMD Ryzen Balanced or Intel Dynamic Tuning.
+        """
+        schemes = []
+        active_guid = "381b4222-f694-41f0-9685-ff5bb260df2e"
+        active_name = "Balanced"
+        is_ryzen = False
+
+        try:
+            c, out = self.run_cmd("powercfg /list")
+            for line in out.splitlines():
+                line = line.strip()
+                m = re.search(r"Power Scheme GUID:\s*([a-f0-9\-]+)\s*\((.*?)\)(\s*\*?)", line, re.IGNORECASE)
+                if m:
+                    guid = m.group(1).strip()
+                    name = m.group(2).strip()
+                    is_active = ("*" in m.group(3)) or ("*" in line)
+                    name = name.replace("AMD Ryzen? Balanced", "AMD Ryzen™ Balanced")
+                    name = name.replace("AMD Ryzen? High Performance", "AMD Ryzen™ High Performance")
+                    if is_active and "ryzen" in name.lower():
+                        is_ryzen = True
+                    schemes.append({
+                        "guid": guid,
+                        "name": name,
+                        "is_active": is_active
+                    })
+                    if is_active:
+                        active_guid = guid
+                        active_name = name
+        except Exception:
+            pass
+
+        return {
+            "active_guid": active_guid,
+            "active_name": active_name,
+            "is_ryzen": is_ryzen,
+            "all_schemes": schemes
+        }
+
+    def set_active_power_scheme(self, scheme_guid: str) -> Tuple[bool, str]:
+        """Activates a specified Windows Power Scheme GUID."""
+        try:
+            c, out = self.run_cmd(f"powercfg /setactive {scheme_guid}")
+            if c == 0:
+                self.log(f"Activated Windows Power Scheme: {scheme_guid}", "SUCCESS")
+                return True, "Power Scheme activated successfully."
+            return False, f"Failed to activate power scheme: {out}"
+        except Exception as e:
+            return False, str(e)
 
     def get_processor_eco_state(self) -> bool:
         """Checks whether DC processor throttle capping is active (<=85%)."""

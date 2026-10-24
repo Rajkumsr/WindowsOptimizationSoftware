@@ -100,6 +100,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
   * Explorer Thumbnail Cache
 
 ### 14. 🔋 Universal Battery & Power Conservation Suite (Laptops)
+* **Active Windows Power Plan & Vendor Scheme Detection**: Live display of your currently active Windows power scheme (e.g., `AMD Ryzen™ Balanced`, `Balanced`, `High Performance`), displaying full GUIDs, custom vendor badges (`🔥 AMD RYZEN™ CPPC TUNED`), and 1-click plan switcher buttons.
 * **Real-Time Battery & Power Telemetry**: Instant battery percentage, AC adapter status, charging state, and automatic chassis classification (`🖥️ Desktop PC` vs `💻 Laptop`).
 * **Processor Eco Boost Capping on DC**: Limits CPU boost frequency to 85% and optimizes Energy-Performance Preference (`PERFEPP`) on battery power to eliminate thermal spikes, quiet fan noise, and extend battery runtime by up to 25%.
 * **PCIe Link State Power Management (ASPM)**: Activates aggressive Active State Power Management (`powercfg /setdcvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 2`) to power down idle PCIe bus lanes and NVMe storage on DC.
