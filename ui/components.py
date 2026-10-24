@@ -12,12 +12,17 @@ import os
 import sys
 import tkinter as tk
 from typing import Optional, Callable
-from theme import THEME, FONT_FAMILY
+try:
+    from ui.theme import THEME, FONT_FAMILY
+except ImportError:
+    from .theme import THEME, FONT_FAMILY
 
 def get_app_icon_path() -> Optional[str]:
     """Resolves and returns the absolute path to the application icon if present."""
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     candidates = [
         os.path.join(getattr(sys, "_MEIPASS", ""), "assets", "app_icon.ico"),
+        os.path.join(base_dir, "assets", "app_icon.ico"),
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "app_icon.ico")
     ]
     for ic in candidates:

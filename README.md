@@ -131,10 +131,33 @@ Double-click `Run_ApexOptimizer.bat` in the project root. It will automatically 
 # Standard Launch
 python main.py
 
-# Or run directly with GUI script
-python gui_app.py
+# Or run directly via package module
+python -m ui.app
 ```
-*(No external pip dependencies required — uses Python's standard library `tkinter`, `winreg`, and `ctypes`)*
+*(Uses Python's standard library `tkinter`, `winreg`, and `ctypes`)*
+
+### 📁 Project Architecture
+```text
+WindowsOptimizationSoftware/
+├── assets/                  # 256x256 high-resolution application icons
+│   └── app_icon.ico
+├── core/                    # Backend Optimization & OS Telemetry Engine
+│   ├── __init__.py
+│   └── optimizer.py         # Win32 APIs, Registry tweaker, WMI & Power metrics
+├── ui/                      # Modern Tkinter Presentation Layer
+│   ├── __init__.py
+│   ├── app.py               # Main window controller, telemetry loop & tabs
+│   ├── theme.py             # Windows Personalization accent & DWM color sync
+│   ├── components.py        # DonutGauge, ToastManager, ModernCard, ToggleSwitch
+│   ├── tray.py              # System Tray background menu & notification manager
+│   └── search_data.py       # Live Ctrl+F search index registry
+├── main.py                  # Application entry point & automated UAC elevation
+├── build_exe.py             # Standalone binary compiler (PyInstaller)
+├── file_version_info.txt    # Windows PE version and developer metadata
+├── Run_ApexOptimizer.bat    # 1-Click launcher script
+├── Build_Executable.bat     # 1-Click build script
+└── README.md                # Documentation & Architecture
+```
 
 ### Method 3: Compile Standalone Single-File Executable (.exe)
 Compile the entire suite into a single portable binary that runs on any Windows PC with zero Python installation required:

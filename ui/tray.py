@@ -4,7 +4,10 @@ Integrates with Windows Notification Area (System Tray) using pystray and Pillow
 providing background operation, quick boost actions, and power monitor notifications.
 """
 
-from ui_components import get_app_icon_path
+try:
+    from ui.components import get_app_icon_path
+except ImportError:
+    from .components import get_app_icon_path
 
 class ApexTrayManager:
     """Manages the Windows Notification Area (System Tray) icon and quick action menu."""

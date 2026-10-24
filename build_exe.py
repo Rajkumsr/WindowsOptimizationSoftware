@@ -85,6 +85,7 @@ def build_executable(project_root, icon_path):
         "--uac-admin",
         "--name", "ApexWindowsOptimizer",
         "--icon", icon_path,
+        "--paths", project_root,
         "--add-data", f"{os.path.join(project_root, 'assets')};assets",
         "--hidden-import", "pystray._win32",
         "--hidden-import", "PIL",

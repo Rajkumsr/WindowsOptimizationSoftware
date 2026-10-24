@@ -36,12 +36,23 @@ if sys.platform == "win32":
     except Exception:
         pass
 
+# Ensure workspace root is in sys.path for direct execution
+_root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _root_dir not in sys.path:
+    sys.path.insert(0, _root_dir)
+
 # Modular subsystem imports
-import core_optimizer
-from theme import THEME, FONT_FAMILY
-from search_data import ALL_SEARCHABLE_TWEAKS
-from ui_components import ToastManager, DonutGauge, ModernCard, ToggleSwitch, get_app_icon_path
-from tray_manager import ApexTrayManager
+import core.optimizer as core_optimizer
+try:
+    from ui.theme import THEME, FONT_FAMILY
+    from ui.search_data import ALL_SEARCHABLE_TWEAKS
+    from ui.components import ToastManager, DonutGauge, ModernCard, ToggleSwitch, get_app_icon_path
+    from ui.tray import ApexTrayManager
+except ImportError:
+    from .theme import THEME, FONT_FAMILY
+    from .search_data import ALL_SEARCHABLE_TWEAKS
+    from .components import ToastManager, DonutGauge, ModernCard, ToggleSwitch, get_app_icon_path
+    from .tray import ApexTrayManager
 
 
 class ApexOptimizerApp:

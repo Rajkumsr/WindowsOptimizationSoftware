@@ -45,8 +45,8 @@ def main():
         except Exception:
             pass  # Fallback to standard execution if user denies UAC prompt
 
-    import gui_app
-    gui_app.main()
+    from ui import main as gui_main
+    gui_main()
 
 if __name__ == "__main__":
     main()
