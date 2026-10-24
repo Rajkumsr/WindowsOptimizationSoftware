@@ -26,42 +26,44 @@ def load_windows_system_theme() -> Dict[str, str]:
         except Exception:
             pass
 
-    # Baseline colors mapped to Windows dark/light mode
+    # Baseline colors borrowed directly from Windows 11 Fluent / Mica specifications
     if is_dark:
         theme = {
             "is_dark": True,
-            "bg_app": "#0D0F17",         # Deep obsidian window background
-            "bg_sidebar": "#131622",     # Sleek dark sidebar
-            "bg_card": "#1A1E2E",        # Card / panel background
-            "bg_card_alt": "#21263A",    # Hover / secondary card
-            "bg_input": "#12141F",       # Input & terminal background
-            "border": "#282E47",         # Subtle border line
-            "border_highlight": "#3A4366",
+            "bg_app": "#202020",         # Official Windows 11 Fluent dark window background
+            "bg_sidebar": "#181818",     # Official Windows 11 Fluent dark sidebar / nav rail
+            "bg_card": "#2B2B2B",        # Official Windows 11 card surface
+            "bg_card_alt": "#323232",    # Hover / secondary card surface
+            "bg_input": "#1C1C1C",       # Input & terminal background
+            "border": "#383838",         # Windows 11 subtle card stroke
+            "border_highlight": "#484848",
+            "border_active": "#0078D4",  # Dynamic Windows accent active border
             "primary": "#0078D4",        # Windows classic blue default
             "primary_hover": "#0067C0",
             "primary_light": "#4CC2FF",
             "accent_cyan": "#99EBFF",
             "accent_contrast": "#F7630C",
             "success": "#10B981",        # Emerald green
-            "success_bg": "#064E3B",
+            "success_bg": "#0C3B2E",
             "warning": "#F59E0B",        # Amber
-            "warning_bg": "#78350F",
+            "warning_bg": "#4A2600",
             "danger": "#EF4444",         # Crimson
-            "danger_bg": "#7F1D1D",
+            "danger_bg": "#4A1212",
             "text_main": "#F9FAFB",      # Bright white text
-            "text_muted": "#9CA3AF",     # Neutral gray text
-            "text_dim": "#6B7280"        # Dark muted text
+            "text_muted": "#A1A1AA",     # Neutral gray text
+            "text_dim": "#71717A"        # Dark muted text
         }
     else:
         theme = {
             "is_dark": False,
-            "bg_app": "#F3F4F6",         # Light window background
-            "bg_sidebar": "#E5E7EB",     # Light sidebar
-            "bg_card": "#FFFFFF",        # White card
-            "bg_card_alt": "#F9FAFB",    # Off-white card
+            "bg_app": "#F3F3F3",         # Official Windows 11 Mica light window background
+            "bg_sidebar": "#EAEAEA",     # Windows 11 light sidebar
+            "bg_card": "#FFFFFF",        # White card surface
+            "bg_card_alt": "#F8F8F8",    # Hover / secondary card
             "bg_input": "#FFFFFF",       # Input background
-            "border": "#D1D5DB",         # Light border line
-            "border_highlight": "#9CA3AF",
+            "border": "#E5E5E5",         # Light border line
+            "border_highlight": "#D1D5DB",
+            "border_active": "#0078D4",
             "primary": "#0078D4",
             "primary_hover": "#0067C0",
             "primary_light": "#4CC2FF",
@@ -73,9 +75,9 @@ def load_windows_system_theme() -> Dict[str, str]:
             "warning_bg": "#FEF3C7",
             "danger": "#DC2626",
             "danger_bg": "#FEE2E2",
-            "text_main": "#111827",
-            "text_muted": "#4B5563",
-            "text_dim": "#9CA3AF"
+            "text_main": "#18181B",
+            "text_muted": "#52525B",
+            "text_dim": "#A1A1AA"
         }
 
     if sys.platform != "win32":
@@ -133,6 +135,9 @@ def load_windows_system_theme() -> Dict[str, str]:
             theme["text_muted"] = gray_hex
     except Exception:
         pass
+
+    # 5. Ensure active border accent matches Windows primary accent
+    theme["border_active"] = theme["primary"]
 
     return theme
 

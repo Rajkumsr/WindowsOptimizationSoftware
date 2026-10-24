@@ -17,7 +17,7 @@ import ctypes
 import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Callable
 import webbrowser
 
 # Enable High-DPI Awareness and register AppUserModelID for Windows Taskbar
@@ -46,12 +46,12 @@ import core.optimizer as core_optimizer
 try:
     from ui.theme import THEME, FONT_FAMILY
     from ui.search_data import ALL_SEARCHABLE_TWEAKS
-    from ui.components import ToastManager, DonutGauge, ModernCard, ToggleSwitch, get_app_icon_path
+    from ui.components import ToastManager, DonutGauge, ModernCard, ToggleSwitch, TweakTile, render_tweak_grid, get_app_icon_path
     from ui.tray import ApexTrayManager
 except ImportError:
     from .theme import THEME, FONT_FAMILY
     from .search_data import ALL_SEARCHABLE_TWEAKS
-    from .components import ToastManager, DonutGauge, ModernCard, ToggleSwitch, get_app_icon_path
+    from .components import ToastManager, DonutGauge, ModernCard, ToggleSwitch, TweakTile, render_tweak_grid, get_app_icon_path
     from .tray import ApexTrayManager
 
 
@@ -432,44 +432,117 @@ class ApexOptimizerApp:
         self.body_frame = tk.Frame(self.root, bg=THEME["bg_app"])
         self.body_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
-        # Left Sidebar
-        self.sidebar = tk.Frame(self.body_frame, bg=THEME["bg_sidebar"], width=230, padx=10, pady=12)
+        # Left Sidebar (Windows 11 Fluent Navigation Rail)
+        self.sidebar = tk.Frame(self.body_frame, bg=THEME["bg_sidebar"], width=236, padx=8, pady=8)
         self.sidebar.pack(side=tk.LEFT, fill=tk.Y)
         self.sidebar.pack_propagate(False)
 
-        nav_items = [
-            ("dashboard", "📊  Dashboard"),
-            ("system", "⚡  System & Speed"),
-            ("privacy", "🛡️  Privacy & Telemetry"),
-            ("explorer", "🎨  Explorer & Shell"),
-            ("services", "⚙️  Services Optimizer"),
-            ("debloat", "🗑️  App Debloater"),
-            ("gaming", "🎮  Gaming & GPU Boost"),
-            ("battery", "🔋  Battery & Power"),
-            ("cleaner", "🧹  Disk & Cache Clean"),
-            ("updater", "📦  Software Updater"),
-            ("terminal", "📝  Live Activity Log"),
-            ("developer", "👨‍💻  Developer & About")
+        nav_sections = [
+            ("OVERVIEW", [
+                ("dashboard", "📊 Dashboard")
+            ]),
+            ("OPTIMIZATIONS", [
+                ("system", "⚡ System & Speed"),
+                ("privacy", "🛡️ Privacy & Telemetry"),
+                ("explorer", "🎨 Explorer & Shell"),
+                ("gaming", "🎮 Gaming & GPU Boost"),
+                ("battery", "🔋 Battery & Power")
+            ]),
+            ("SYSTEM TOOLS", [
+                ("services", "⚙️ Services Optimizer"),
+                ("debloat", "🗑️ App Debloater"),
+                ("cleaner", "🧹 Disk & Cache Clean"),
+                ("updater", "📦 Software Updater")
+            ]),
+            ("ACTIVITY & ABOUT", [
+                ("terminal", "📝 Live Activity Log"),
+                ("developer", "👨‍💻 Developer & About")
+            ])
         ]
 
-        for tab_id, label in nav_items:
-            btn = tk.Button(
+        for s_idx, (sec_title, items) in enumerate(nav_sections):
+            tk.Label(
                 self.sidebar,
-                text=label,
-                font=(FONT_FAMILY, 9),
-                fg=THEME["text_muted"],
+                text=sec_title,
+                font=(FONT_FAMILY, 7, "bold"),
+                fg=THEME["text_dim"],
                 bg=THEME["bg_sidebar"],
-                activebackground=THEME["bg_card"],
-                activeforeground=THEME["text_main"],
-                anchor="w",
-                relief="flat",
-                cursor="hand2",
-                padx=14,
-                pady=7,
-                command=lambda tid=tab_id: self.switch_tab(tid)
-            )
-            btn.pack(fill=tk.X, pady=1)
-            self.tab_buttons[tab_id] = btn
+                anchor="w"
+            ).pack(fill=tk.X, padx=8, pady=(8 if s_idx > 0 else 2, 2))
+
+            for tab_id, label in items:
+                btn = tk.Button(
+                    self.sidebar,
+                    text=label,
+                    font=(FONT_FAMILY, 9),
+                    fg=THEME["text_muted"],
+                    bg=THEME["bg_sidebar"],
+                    activebackground=THEME["bg_card"],
+                    activeforeground=THEME["text_main"],
+                    anchor="w",
+                    relief="flat",
+                    cursor="hand2",
+                    padx=10,
+                    pady=4,
+                    command=lambda tid=tab_id: self.switch_tab(tid)
+                )
+                btn.pack(fill=tk.X, pady=1)
+                self.tab_buttons[tab_id] = btn
+
+        # Persistent Sidebar Live Mini Telemetry Dock
+        self.sidebar_dock = tk.Frame(
+            self.sidebar,
+            bg=THEME["bg_card"],
+            padx=10,
+            pady=8,
+            highlightbackground=THEME["border"],
+            highlightthickness=1
+        )
+        self.sidebar_dock.pack(side=tk.BOTTOM, fill=tk.X, pady=(0, 6))
+
+        dock_top = tk.Frame(self.sidebar_dock, bg=THEME["bg_card"])
+        dock_top.pack(fill=tk.X)
+        tk.Label(
+            dock_top,
+            text="LIVE SYSTEM MONITOR",
+            font=(FONT_FAMILY, 7, "bold"),
+            fg=THEME["primary_light"],
+            bg=THEME["bg_card"]
+        ).pack(side=tk.LEFT)
+        self.sidebar_dock_pulse = tk.Label(
+            dock_top,
+            text="● ACTIVE",
+            font=(FONT_FAMILY, 7, "bold"),
+            fg=THEME["success"],
+            bg=THEME["bg_card"]
+        )
+        self.sidebar_dock_pulse.pack(side=tk.RIGHT)
+
+        self.sidebar_ram_lbl = tk.Label(
+            self.sidebar_dock,
+            text="RAM: Initializing...",
+            font=(FONT_FAMILY, 7),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"]
+        )
+        self.sidebar_ram_lbl.pack(anchor="w", pady=(3, 1))
+
+        self.sidebar_ram_bar = ttk.Progressbar(
+            self.sidebar_dock,
+            mode="determinate",
+            length=180,
+            style="TProgressbar"
+        )
+        self.sidebar_ram_bar.pack(fill=tk.X, pady=(0, 2))
+
+        self.sidebar_sub_lbl = tk.Label(
+            self.sidebar_dock,
+            text="CPU: Calculating...",
+            font=(FONT_FAMILY, 7),
+            fg=THEME["text_dim"],
+            bg=THEME["bg_card"]
+        )
+        self.sidebar_sub_lbl.pack(anchor="w")
 
         # Pinned Sidebar Developer Card
         dev_footer = tk.Frame(self.sidebar, bg=THEME["bg_card"], padx=10, pady=10, highlightbackground=THEME["border"], highlightthickness=1)
@@ -631,6 +704,25 @@ class ApexOptimizerApp:
     # -------------------------------------------------------------
     def schedule_live_telemetry(self):
         def _update():
+            # 1. Update Persistent Sidebar Live Mini Telemetry Dock (Fast & Cached)
+            try:
+                if hasattr(self, 'sidebar_ram_lbl') and self.sidebar_ram_lbl.winfo_exists():
+                    hw = self.engine.get_hardware_info()
+                    tot_ram = hw.get("total_ram", "16 GB")
+                    free_ram = hw.get("free_ram", "8 GB")
+                    ram_pct_str = hw.get("ram_percent", "50%").replace("%", "").strip()
+                    try:
+                        ram_val = float(ram_pct_str)
+                    except Exception:
+                        ram_val = 50.0
+                    cpu_val = hw.get("cpu_percent", 0.0)
+                    self.sidebar_ram_lbl.config(text=f"RAM: {free_ram} Free of {tot_ram} ({ram_val:.0f}%)")
+                    self.sidebar_ram_bar['value'] = ram_val
+                    self.sidebar_sub_lbl.config(text=f"CPU: {cpu_val:.0f}% Load • Drive: {hw.get('system_drive', 'C:')}")
+            except Exception:
+                pass
+
+            # 2. Update Dashboard Widgets if active
             if self.active_tab == "dashboard":
                 hw = self.engine.get_hardware_info()
                 if hasattr(self, 'ram_val_lbl') and self.ram_val_lbl.winfo_exists():
@@ -925,32 +1017,37 @@ class ApexOptimizerApp:
     # TAB 2: System & Speed
     # -------------------------------------------------------------
     def render_system_tweaks(self):
-        self.render_section_header(
-            "System Performance & Kernel Tuning",
-            "Fine-tune low-level Windows kernel parameters, network throughput, startup timeouts, and hardware power policies."
-        )
-
-        scroll_canvas, scroll_content = self.create_scrollable_container()
-
         kernel_tweak_defs = [
-            ("network_throttling", "Disable Multimedia Network Throttling", "Sets NetworkThrottlingIndex to disabled (0xFFFFFFFF) so gaming and streaming packets are never prioritized down."),
-            ("system_responsiveness", "Foreground System Responsiveness", "Reserves 90% CPU priority for active foreground games and programs (SystemResponsiveness = 10)."),
-            ("irp_stack_size", "Optimize IRP Stack Size", "Sets IRPStackSize to 30, significantly increasing throughput for local network and file sharing transfers."),
-            ("fast_shutdown", "Accelerated Service Termination", "Reduces WaitToKillServiceTimeout to 5000ms, preventing stalled services from delaying shutdown."),
-            ("long_paths", "Enable NTFS Long File Paths", "Removes legacy MAX_PATH 260-character path limits in Windows file system."),
-            ("block_oem_bloat", "Block OEM Firmware WPBT Software", "Blocks hardware vendors and UEFI firmware from automatically installing bundled promotional software at boot."),
-            ("disable_p2p_update", "Disable P2P Update Seeding", "Stops Windows Delivery Optimization from using your upstream internet connection to upload updates to others."),
-            ("f8_boot_menu", "Enable Classic F8 Boot Menu", "Restores the legacy F8 boot selection menu for easy recovery and Safe Mode access."),
-            ("disable_hibernation", "Disable Hibernation (Desktop PC)", "Deletes hiberfil.sys to reclaim disk space equivalent to your total RAM size (desktops only).")
+            ("network_throttling", "Multimedia Network Throttling", "Sets NetworkThrottlingIndex to disabled (0xFFFFFFFF) so gaming and streaming packets are never prioritized down.", "NETWORK", "⚡ LOW PACKET JITTER"),
+            ("system_responsiveness", "Foreground System Responsiveness", "Reserves 90% CPU priority for active foreground games and programs (SystemResponsiveness = 10).", "KERNEL", "🚀 90% CPU PRIORITY"),
+            ("irp_stack_size", "Optimize IRP Stack Size", "Sets IRPStackSize to 30, significantly increasing throughput for local network and file sharing transfers.", "STORAGE", "📁 MAX NETWORK BUFFER"),
+            ("fast_shutdown", "Accelerated Service Termination", "Reduces WaitToKillServiceTimeout to 5000ms, preventing stalled services from delaying shutdown.", "STARTUP", "⏱️ 5-SEC FAST KILL"),
+            ("long_paths", "Enable NTFS Long File Paths", "Removes legacy MAX_PATH 260-character path limits in Windows file system.", "FILESYSTEM", "📂 32K PATH LIMIT"),
+            ("block_oem_bloat", "Block OEM Firmware WPBT", "Blocks hardware vendors and UEFI firmware from automatically installing bundled promotional software at boot.", "FIRMWARE", "🛡️ WPBT ROOTKIT BLOCKED"),
+            ("disable_p2p_update", "Disable P2P Update Seeding", "Stops Windows Delivery Optimization from using your upstream internet connection to upload updates to others.", "BANDWIDTH", "🌐 ZERO UPLOAD DRAIN"),
+            ("f8_boot_menu", "Enable Classic F8 Boot Menu", "Restores the legacy F8 boot selection menu for easy recovery and Safe Mode access.", "BOOT", "⌨️ INSTANT SAFE MODE"),
+            ("disable_hibernation", "Disable Hibernation (Desktop)", "Deletes hiberfil.sys to reclaim disk space equivalent to your total RAM size (desktops only).", "STORAGE", "💾 RECLAIM RAM-SIZE SSD")
         ]
 
         power_tweak_defs = [
-            ("processor_eco", "Processor Efficiency & Thermal Capping on Battery (DC)", "Caps aggressive CPU boost to 85% on battery. Eliminates high heat, fan noise, and extends screen-on battery runtime by up to 25%."),
-            ("pcie_aspm", "PCIe & Chipset Link State Power Management (ASPM)", "Places idle NVMe SSD lanes, discrete GPU, and motherboard interconnects into low-power states to cut idle motherboard battery drain."),
-            ("fast_startup", "Disable Windows Fast Startup (Stop Phantom Shutdown Drain)", "Stops Windows from saving an active kernel hibernation state at shutdown, eliminating 3-5% overnight battery discharge while powered off.")
+            ("processor_eco", "Processor Efficiency on Battery", "Caps aggressive CPU boost to 85% on battery. Eliminates high heat, fan noise, and extends screen-on battery runtime by up to 25%.", "CPU ECO", "🔋 +25% BATTERY RUNTIME"),
+            ("pcie_aspm", "PCIe Link State Power (ASPM)", "Places idle NVMe SSD lanes, discrete GPU, and motherboard interconnects into low-power states to cut idle motherboard battery drain.", "CHIPSET", "❄️ CUT MOTHERBOARD DRAIN"),
+            ("fast_startup", "Disable Fast Startup Drain", "Stops Windows from saving an active kernel hibernation state at shutdown, eliminating 3-5% overnight battery discharge while powered off.", "BATTERY", "🛑 ZERO OVERNIGHT DRAIN")
         ]
 
+        all_keys = [k[0] for k in kernel_tweak_defs] + [k[0] for k in power_tweak_defs]
         self.system_toggles.clear()
+
+        update_hero = self.render_section_hero(
+            "System Performance & Kernel Tuning",
+            "Fine-tune low-level Windows kernel parameters, network throughput, startup timeouts, and hardware power policies.",
+            all_keys,
+            self.system_toggles,
+            self.action_apply_system_tweaks,
+            icon="⚡"
+        )
+
+        scroll_canvas, scroll_content = self.create_scrollable_container()
 
         # Group 1: Kernel & System Responsiveness
         group1_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
@@ -963,13 +1060,7 @@ class ApexOptimizerApp:
             bg=THEME["bg_app"]
         ).pack(side=tk.LEFT)
 
-        for key, title, desc in kernel_tweak_defs:
-            card = ModernCard(scroll_content)
-            card.pack(fill=tk.X, pady=(0, 8))
-            current_state = self.live_states.get(key, True)
-            toggle = ToggleSwitch(card, title, desc, default=current_state)
-            toggle.pack(fill=tk.X)
-            self.system_toggles[key] = toggle
+        render_tweak_grid(scroll_content, kernel_tweak_defs, self.live_states, self.system_toggles, on_change_callback=lambda k, s: update_hero())
 
         # Group 2: Power, Energy & Hardware Efficiency Tweaks (Moved from Battery section)
         group2_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
@@ -991,86 +1082,63 @@ class ApexOptimizerApp:
             pady=2
         ).pack(side=tk.RIGHT)
 
-        for key, title, desc in power_tweak_defs:
-            card = ModernCard(scroll_content)
-            card.pack(fill=tk.X, pady=(0, 8))
-            current_state = self.live_states.get(key, False if key != "fast_startup" else True)
-            toggle = ToggleSwitch(card, title, desc, default=current_state)
-            toggle.pack(fill=tk.X)
-            self.system_toggles[key] = toggle
-
-        # Action Button
-        btn_frame = tk.Frame(self.content_container, bg=THEME["bg_app"])
-        btn_frame.pack(fill=tk.X, pady=(12, 0))
-
-        tk.Button(
-            btn_frame,
-            text="APPLY SYSTEM CHANGES",
-            font=(FONT_FAMILY, 9, "bold"),
-            fg="#FFFFFF",
-            bg=THEME["primary"],
-            activebackground=THEME["primary_hover"],
-            relief="flat",
-            cursor="hand2",
-            padx=18,
-            pady=8,
-            command=self.action_apply_system_tweaks
-        ).pack(side=tk.RIGHT)
+        render_tweak_grid(scroll_content, power_tweak_defs, self.live_states, self.system_toggles, on_change_callback=lambda k, s: update_hero())
 
     # -------------------------------------------------------------
     # TAB 3: Privacy & Telemetry
     # -------------------------------------------------------------
     def render_privacy_tweaks(self):
-        self.render_section_header(
+        tweak_defs = [
+            ("disable_telemetry", "Telemetry & CEIP Tracking", "Disables DiagTrack, feedback notifications, Windows Error Reporting telemetry, and Customer Experience Program.", "DIAGNOSTICS", "🛡️ ZERO TELEMETRY LOGS"),
+            ("disable_lockscreen_ads", "Lock Screen Spotlight Ads", "Prevents Microsoft Spotlight from displaying sponsored tips, recommendations, and advertisements on the lock screen.", "ADS", "🔒 CLEAN LOCK SCREEN"),
+            ("disable_recall", "Recall AI Activity Tracking", "Blocks automated continuous screenshot captures and AI analysis from the Recall subsystem.", "AI PRIVACY", "🚫 NO SCREENSHOT LOGS"),
+            ("optimize_edge", "Edge Background Harvester", "Stops Microsoft Edge from running in the background when closed and disables startup boost and shopping assistant.", "BROWSER", "⚡ SAVE 400MB RAM"),
+            ("suppress_oobe_telemetry", "OOBE Diagnostic Prompts", "Bypasses consumer data harvesting prompts and privacy opt-ins during updates.", "PROMPTS", "🛑 NO HARVEST PROMPTS"),
+            ("disable_office_telemetry", "Microsoft Office Telemetry", "Disables telemetry logging, Customer Experience feedback, and diagnostic data upload for Office 2013-365.", "OFFICE", "📊 CLEAN OFFICE LOGS")
+        ]
+
+        all_keys = [k[0] for k in tweak_defs]
+        self.privacy_toggles.clear()
+
+        update_hero = self.render_section_hero(
             "Privacy, Telemetry & Background Tracking",
-            "Eliminate background diagnostic data collection, advertising IDs, and invasive telemetry. Toggles reflect current state."
+            "Eliminate background diagnostic data collection, advertising IDs, and invasive telemetry. Toggles reflect current state.",
+            all_keys,
+            self.privacy_toggles,
+            self.action_apply_privacy_tweaks,
+            icon="🛡️"
         )
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
 
-        tweak_defs = [
-            ("disable_telemetry", "Disable Diagnostic Telemetry & CEIP", "Disables DiagTrack, feedback notifications, Windows Error Reporting telemetry, and Customer Experience Program."),
-            ("disable_lockscreen_ads", "Disable Lock Screen Spotlight Ads", "Prevents Microsoft Spotlight from displaying sponsored tips, recommendations, and advertisements on the lock screen."),
-            ("disable_recall", "Disable Microsoft Recall AI Tracking", "Blocks automated continuous screenshot captures and AI analysis from the Recall subsystem."),
-            ("optimize_edge", "Optimize Microsoft Edge Background Mode", "Stops Microsoft Edge from running in the background when closed and disables startup boost and shopping assistant."),
-            ("suppress_oobe_telemetry", "Suppress OOBE Diagnostic Experiences", "Bypasses consumer data harvesting prompts and privacy opt-ins during updates."),
-            ("disable_office_telemetry", "Disable Microsoft Office Telemetry", "Disables telemetry logging, Customer Experience feedback, and diagnostic data upload for Office 2013-365.")
-        ]
-
-        self.privacy_toggles.clear()
-        for key, title, desc in tweak_defs:
-            card = ModernCard(scroll_content)
-            card.pack(fill=tk.X, pady=(0, 8))
-            current_state = self.live_states.get(key, True)
-            toggle = ToggleSwitch(card, title, desc, default=current_state)
-            toggle.pack(fill=tk.X)
-            self.privacy_toggles[key] = toggle
-
-        # Action Button
-        btn_frame = tk.Frame(self.content_container, bg=THEME["bg_app"])
-        btn_frame.pack(fill=tk.X, pady=(12, 0))
-
-        tk.Button(
-            btn_frame,
-            text="APPLY PRIVACY CHANGES",
-            font=(FONT_FAMILY, 9, "bold"),
-            fg="#FFFFFF",
-            bg=THEME["primary"],
-            activebackground=THEME["primary_hover"],
-            relief="flat",
-            cursor="hand2",
-            padx=18,
-            pady=8,
-            command=self.action_apply_privacy_tweaks
-        ).pack(side=tk.RIGHT)
+        render_tweak_grid(scroll_content, tweak_defs, self.live_states, self.privacy_toggles, on_change_callback=lambda k, s: update_hero())
 
     # -------------------------------------------------------------
     # TAB 4: Explorer & Shell
     # -------------------------------------------------------------
     def render_explorer_tweaks(self):
-        self.render_section_header(
+        tweak_defs = [
+            ("show_extensions", "Show File Name Extensions", "Always display file extensions (.exe, .txt, .pdf, .zip) to prevent spoofing and improve visibility.", "EXTENSIONS", "📄 VISIBLE EXTENSIONS"),
+            ("show_hidden", "Show Hidden Files & Folders", "Make hidden system files and folders visible in File Explorer.", "FILESYSTEM", "👁️ UNHIDE FILES"),
+            ("open_this_pc", "Open Explorer to 'This PC'", "Launches File Explorer directly into 'This PC' with drives listed, rather than the slow Quick Access view.", "NAVIGATION", "💻 DIRECT DRIVES VIEW"),
+            ("classic_context_menu", "Classic Right-Click Menu", "Restores the traditional, responsive Windows 10 right-click menu without having to click 'Show more options'.", "CONTEXT MENU", "⚡ 1-CLICK ACTIONS"),
+            ("disable_start_bing", "Disable Bing in Start Menu", "Restricts Start Menu search queries to local files and apps, eliminating unwanted web recommendations.", "START MENU", "🔍 INSTANT LOCAL SEARCH"),
+            ("taskbar_end_task", "Taskbar 'End Task' Option", "Adds a direct 'End Task' context menu option when right-clicking running apps on the taskbar.", "TASKBAR", "🛑 1-CLICK FORCE QUIT"),
+            ("clean_taskbar", "Clean Taskbar Clutter", "Hides news widgets, task view, and Copilot buttons from the taskbar to maximize active window space.", "SHELL", "🧹 REMOVE COPILOT/WIDGETS"),
+            ("fast_menu_delay", "Accelerate Menu Animations", "Reduces MenuShowDelay to 10ms for instant dropdowns and context menus.", "ANIMATIONS", "⏱️ 10MS INSTANT POPUP"),
+            ("disable_sticky_keys", "Disable 5x Shift Sticky Keys", "Prevents accidental activation dialogs when tapping Shift repeatedly in games or editing.", "ACCESSIBILITY", "🎮 NO GAME INTERRUPTIONS")
+        ]
+
+        all_keys = [k[0] for k in tweak_defs]
+        self.explorer_toggles.clear()
+
+        update_hero = self.render_section_hero(
             "Explorer & Shell Personalization",
-            "Streamline File Explorer, remove clutter, and restore productivity-focused desktop behaviors."
+            "Streamline File Explorer, remove clutter, and restore productivity-focused desktop behaviors.",
+            all_keys,
+            self.explorer_toggles,
+            self.action_apply_explorer_tweaks,
+            icon="🎨"
         )
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
@@ -1101,44 +1169,7 @@ class ApexOptimizerApp:
             bg=THEME["bg_card"]
         ).pack(anchor="w", padx=24, pady=(2, 0))
 
-        tweak_defs = [
-            ("show_extensions", "Show File Name Extensions", "Always display file extensions (.exe, .txt, .pdf, .zip) to prevent spoofing and improve visibility."),
-            ("show_hidden", "Show Hidden Files & Folders", "Make hidden system files and folders visible in File Explorer."),
-            ("open_this_pc", "Open File Explorer to 'This PC'", "Launches File Explorer directly into 'This PC' with drives listed, rather than the slow Quick Access view."),
-            ("classic_context_menu", "Restore Classic Context Menu (Windows 11)", "Restores the traditional, responsive Windows 10 right-click menu without having to click 'Show more options'."),
-            ("disable_start_bing", "Disable Bing Web Search in Start Menu", "Restricts Start Menu search queries to local files and apps, eliminating unwanted web recommendations."),
-            ("taskbar_end_task", "Enable 'End Task' on Taskbar", "Adds a direct 'End Task' context menu option when right-clicking running apps on the taskbar."),
-            ("clean_taskbar", "Clean Taskbar Clutter (Hide Widgets & Copilot)", "Hides news widgets, task view, and Copilot buttons from the taskbar to maximize active window space."),
-            ("fast_menu_delay", "Accelerate UI Menu Animation Response", "Reduces MenuShowDelay to 10ms for instant dropdowns and context menus."),
-            ("disable_sticky_keys", "Disable 5x Shift Sticky Keys Prompt", "Prevents accidental activation dialogs when tapping Shift repeatedly in games or editing.")
-        ]
-
-        self.explorer_toggles.clear()
-        for key, title, desc in tweak_defs:
-            card = ModernCard(scroll_content)
-            card.pack(fill=tk.X, pady=(0, 8))
-            current_state = self.live_states.get(key, True)
-            toggle = ToggleSwitch(card, title, desc, default=current_state)
-            toggle.pack(fill=tk.X)
-            self.explorer_toggles[key] = toggle
-
-        # Action Button
-        btn_frame = tk.Frame(self.content_container, bg=THEME["bg_app"])
-        btn_frame.pack(fill=tk.X, pady=(12, 0))
-
-        tk.Button(
-            btn_frame,
-            text="APPLY EXPLORER CHANGES",
-            font=(FONT_FAMILY, 9, "bold"),
-            fg="#FFFFFF",
-            bg=THEME["primary"],
-            activebackground=THEME["primary_hover"],
-            relief="flat",
-            cursor="hand2",
-            padx=18,
-            pady=8,
-            command=self.action_apply_explorer_tweaks
-        ).pack(side=tk.RIGHT)
+        render_tweak_grid(scroll_content, tweak_defs, self.live_states, self.explorer_toggles, on_change_callback=lambda k, s: update_hero())
 
     # -------------------------------------------------------------
     # TAB 5: Services Optimizer
@@ -1195,21 +1226,37 @@ class ApexOptimizerApp:
             info_f = tk.Frame(card, bg=THEME["bg_card"])
             info_f.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
+            top_row = tk.Frame(info_f, bg=THEME["bg_card"])
+            top_row.pack(anchor="w")
+
+            chip_lbl = tk.Label(
+                top_row,
+                text=svc["category"].upper(),
+                font=(FONT_FAMILY, 7, "bold"),
+                fg=THEME["accent_cyan"],
+                bg=THEME["bg_card_alt"],
+                padx=6,
+                pady=1
+            )
+            chip_lbl.pack(side=tk.LEFT, padx=(0, 8))
+
             tk.Label(
-                info_f,
+                top_row,
                 text=f"{svc['display']} ({svc['name']})",
                 font=(FONT_FAMILY, 9, "bold"),
                 fg=THEME["text_main"],
                 bg=THEME["bg_card"]
-            ).pack(anchor="w")
+            ).pack(side=tk.LEFT)
 
             tk.Label(
                 info_f,
-                text=f"[{svc['category']}] {svc['desc']}",
+                text=svc['desc'],
                 font=(FONT_FAMILY, 8),
                 fg=THEME["text_muted"],
-                bg=THEME["bg_card"]
-            ).pack(anchor="w", pady=(2, 0))
+                bg=THEME["bg_card"],
+                wraplength=580,
+                justify="left"
+            ).pack(anchor="w", pady=(3, 0))
 
             # Mode selector dropdown
             mode_var = tk.StringVar(value=svc["mode"])
@@ -1279,28 +1326,60 @@ class ApexOptimizerApp:
         sel_card = ModernCard(scroll_content)
         sel_card.pack(fill=tk.X, pady=(0, 10))
 
+        def select_by_ids(id_list):
+            for t in targets:
+                p = t["pattern"]
+                if p in self.debloat_checks:
+                    self.debloat_checks[p].set(t["id"] in id_list)
+
         tk.Button(
             sel_card,
-            text="Select All Recommended",
-            font=(FONT_FAMILY, 8),
-            fg=THEME["text_main"],
+            text="✨ Select Recommended",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["accent_cyan"],
             bg=THEME["bg_card_alt"],
             relief="flat",
             cursor="hand2",
             padx=10,
             pady=4,
             command=lambda: [var.set(True) for var in self.debloat_checks.values()]
-        ).pack(side=tk.LEFT, padx=(0, 8))
+        ).pack(side=tk.LEFT, padx=(0, 6))
 
         tk.Button(
             sel_card,
-            text="Deselect All",
+            text="🤖 AI & Web Feeds",
             font=(FONT_FAMILY, 8),
             fg=THEME["text_main"],
             bg=THEME["bg_card_alt"],
             relief="flat",
             cursor="hand2",
-            padx=10,
+            padx=8,
+            pady=4,
+            command=lambda: select_by_ids(["copilot", "bing_search", "widgets", "web_exp", "cortana"])
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Button(
+            sel_card,
+            text="🎮 Games & Ads",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card_alt"],
+            relief="flat",
+            cursor="hand2",
+            padx=8,
+            pady=4,
+            command=lambda: select_by_ids(["solitaire", "candy_crush", "bing_news", "bing_weather", "feedback_hub"])
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Button(
+            sel_card,
+            text="Deselect All",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card_alt"],
+            relief="flat",
+            cursor="hand2",
+            padx=8,
             pady=4,
             command=lambda: [var.set(False) for var in self.debloat_checks.values()]
         ).pack(side=tk.LEFT)
@@ -1312,11 +1391,34 @@ class ApexOptimizerApp:
             var = tk.BooleanVar(value=True if target["id"] in ["copilot", "bing_search", "widgets", "web_exp", "bing_news", "solitaire"] else False)
             self.debloat_checks[target["pattern"]] = var
 
+            top_row = tk.Frame(card, bg=THEME["bg_card"])
+            top_row.pack(fill=tk.X)
+
+            # Category detection for chip
+            tid = target["id"]
+            if tid in ["copilot", "bing_search", "widgets", "web_exp", "cortana"]:
+                cat_tag = "AI & FEEDS"
+            elif tid in ["solitaire", "candy_crush", "bing_news", "bing_weather"]:
+                cat_tag = "PROMO & GAMES"
+            else:
+                cat_tag = "UTILITY"
+
+            cat_chip = tk.Label(
+                top_row,
+                text=cat_tag,
+                font=(FONT_FAMILY, 7, "bold"),
+                fg=THEME["accent_cyan"],
+                bg=THEME["bg_card_alt"],
+                padx=6,
+                pady=1
+            )
+            cat_chip.pack(side=tk.LEFT, padx=(0, 8))
+
             chk = tk.Checkbutton(
-                card,
+                top_row,
                 text=f"{target['name']}",
                 variable=var,
-                font=(FONT_FAMILY, 10, "bold"),
+                font=(FONT_FAMILY, 9, "bold"),
                 fg=THEME["text_main"],
                 bg=THEME["bg_card"],
                 selectcolor=THEME["bg_card_alt"],
@@ -1324,7 +1426,7 @@ class ApexOptimizerApp:
                 activeforeground=THEME["text_main"],
                 cursor="hand2"
             )
-            chk.pack(anchor="w")
+            chk.pack(side=tk.LEFT)
 
             tk.Label(
                 card,
@@ -1357,9 +1459,32 @@ class ApexOptimizerApp:
     # TAB 7: Gaming & GPU Boost
     # -------------------------------------------------------------
     def render_gaming_boost(self, refresh_gpu: bool = False):
-        self.render_section_header(
+        gfx_tweak_defs = [
+            ("enable_hags", "Hardware Accelerated GPU Scheduling", "Passes memory scheduling directly to GPU VRAM for reduced latency (reboot required).", "GPU HAGS", "⚡ DIRECT VRAM TIMING"),
+            ("windowed_optimizations", "Windowed Game Optimizations", "Enables the modern flip model presentation for DirectX 10/11 windowed games.", "FLIP MODEL", "🚀 TEAR-FREE FLIP"),
+            ("mmcss_priority", "MMCSS Multimedia GPU Priority", "Configures GPU Priority = 8, Priority = 6, and High scheduling category for ultra-smooth frame delivery.", "MMCSS", "🎮 HIGH FRAME RATE")
+        ]
+
+        latency_tweak_defs = [
+            ("disable_gamedvr", "Disable Xbox Game Bar & DVR", "Stops continuous 60 FPS background recording from consuming GPU encoder bandwidth, VRAM, and disk I/O.", "GAME DVR", "🛑 +15% GPU BANDWIDTH"),
+            ("enable_game_mode", "Windows Native Game Mode", "Prioritizes CPU and GPU resources for active game processes and halts background Windows updates.", "GAME MODE", "⚡ 100% CPU TO GAMES"),
+            ("disable_mouse_acceleration", "1:1 Raw Mouse Input", "Disables Windows 'Enhanced Pointer Precision' for true 1:1 muscle memory mouse tracking in competitive games.", "RAW INPUT", "🎯 ZERO ACCEL DRIFT"),
+            ("network_gaming_latency", "Lower Ping (No Nagle)", "Disables packet buffering delay on network adapters (TcpAckFrequency & TCPNoDelay) for lower ping in online games.", "LOW PING", "🌐 -20MS LATENCY"),
+            ("reset_hpet", "Reset HPET Override Timer", "Removes explicit useplatformclock overrides, fixing micro-stuttering and timer desync.", "HPET", "⏱️ ZERO MICRO-STUTTER"),
+            ("disable_power_throttling", "Disable CPU Power Throttling", "Prevents Windows power throttling from lowering CPU frequencies under intense gaming loads (Desktop).", "THROTTLING", "🔥 100% SUSTAINED CLOCK"),
+            ("ultimate_performance", "Ultimate Performance Power Plan", "Duplicates and activates Windows' hidden Ultimate Performance power plan for 0% latency throttling.", "POWER PLAN", "⚡ 0% IDLE LATENCY")
+        ]
+
+        all_keys = [k[0] for k in gfx_tweak_defs] + [k[0] for k in latency_tweak_defs]
+        self.gaming_toggles.clear()
+
+        update_hero = self.render_section_hero(
             "Gaming & GPU Performance Boost",
-            "Unlock ultra-low input latency, dedicated multimedia priority, maximum hardware clocks, and real-time GPU/fan monitoring."
+            "Unlock ultra-low input latency, dedicated multimedia priority, maximum hardware clocks, and real-time GPU/fan monitoring.",
+            all_keys,
+            self.gaming_toggles,
+            self.action_apply_gaming_tweaks,
+            icon="🎮"
         )
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
@@ -1424,73 +1549,19 @@ class ApexOptimizerApp:
             tk.Label(tile, text=label, font=(FONT_FAMILY, 7, "bold"), fg=THEME["text_dim"], bg=THEME["bg_input"]).pack(anchor="w")
             tk.Label(tile, text=val, font=(FONT_FAMILY, 9, "bold"), fg=val_col, bg=THEME["bg_input"]).pack(anchor="w", pady=(2, 0))
 
-        # ---------------------------------------------------------
         # Group 1: Core Graphics & Driver Tuning
-        # ---------------------------------------------------------
-        gfx_tweak_defs = [
-            ("enable_hags", "Hardware-Accelerated GPU Scheduling (HAGS)", "Passes memory scheduling directly to GPU VRAM for reduced latency (reboot required)."),
-            ("windowed_optimizations", "Optimizations for Windowed Games", "Enables the modern flip model presentation for DirectX 10/11 windowed games."),
-            ("mmcss_priority", "MMCSS Multimedia Priority (Games & Audio)", "Configures GPU Priority = 8, Priority = 6, and Scheduling Category = High for ultra-smooth frame delivery.")
-        ]
-
-        # ---------------------------------------------------------
-        # Group 2: Latency, Anti-Stutter & Input Response
-        # ---------------------------------------------------------
-        latency_tweak_defs = [
-            ("disable_gamedvr", "Disable Xbox Game Bar & DVR Background Recording", "Stops continuous 60 FPS background recording from consuming GPU encoder bandwidth, VRAM, and disk I/O."),
-            ("enable_game_mode", "Enable Windows Native Game Mode", "Prioritizes CPU and GPU resources for active game processes and halts background Windows updates."),
-            ("disable_mouse_acceleration", "Disable Mouse Pointer Acceleration (1:1 Raw Input)", "Disables Windows 'Enhanced Pointer Precision' for true 1:1 muscle memory mouse tracking in competitive games."),
-            ("network_gaming_latency", "Lower Gaming Ping (Disable Nagle's Algorithm)", "Disables packet buffering delay on network adapters (TcpAckFrequency & TCPNoDelay) for lower ping in online games."),
-            ("reset_hpet", "Reset HPET Override Timer Dependency", "Removes explicit useplatformclock overrides, fixing micro-stuttering and timer desync."),
-            ("disable_power_throttling", "Disable CPU Power Throttling", "Prevents Windows power throttling from lowering CPU frequencies under intense gaming loads (Desktop)."),
-            ("ultimate_performance", "Unlock Ultimate Performance Power Scheme", "Duplicates and activates Windows' hidden Ultimate Performance power plan for 0% latency throttling.")
-        ]
-
-        self.gaming_toggles.clear()
-
-        # Render Group 1
         g1_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
         g1_hdr.pack(fill=tk.X, pady=(12, 6))
         tk.Label(g1_hdr, text="⚡ Core Graphics & Driver Tuning", font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_app"]).pack(side=tk.LEFT)
 
-        for key, title, desc in gfx_tweak_defs:
-            card = ModernCard(scroll_content)
-            card.pack(fill=tk.X, pady=(0, 8))
-            current_state = self.live_states.get(key, True)
-            toggle = ToggleSwitch(card, title, desc, default=current_state)
-            toggle.pack(fill=tk.X)
-            self.gaming_toggles[key] = toggle
+        render_tweak_grid(scroll_content, gfx_tweak_defs, self.live_states, self.gaming_toggles, on_change_callback=lambda k, s: update_hero())
 
-        # Render Group 2
+        # Group 2: Latency, Anti-Stutter & Input Response
         g2_hdr = tk.Frame(scroll_content, bg=THEME["bg_app"])
-        g2_hdr.pack(fill=tk.X, pady=(12, 6))
+        g2_hdr.pack(fill=tk.X, pady=(14, 6))
         tk.Label(g2_hdr, text="🎯 Input Latency, Anti-Stutter & Frame-Drop Prevention", font=(FONT_FAMILY, 10, "bold"), fg=THEME["text_main"], bg=THEME["bg_app"]).pack(side=tk.LEFT)
 
-        for key, title, desc in latency_tweak_defs:
-            card = ModernCard(scroll_content)
-            card.pack(fill=tk.X, pady=(0, 8))
-            current_state = self.live_states.get(key, True)
-            toggle = ToggleSwitch(card, title, desc, default=current_state)
-            toggle.pack(fill=tk.X)
-            self.gaming_toggles[key] = toggle
-
-        # Action Button
-        btn_frame = tk.Frame(self.content_container, bg=THEME["bg_app"])
-        btn_frame.pack(fill=tk.X, pady=(12, 0))
-
-        tk.Button(
-            btn_frame,
-            text="APPLY GAMING BOOST",
-            font=(FONT_FAMILY, 9, "bold"),
-            fg="#FFFFFF",
-            bg=THEME["primary"],
-            activebackground=THEME["primary_hover"],
-            relief="flat",
-            cursor="hand2",
-            padx=18,
-            pady=8,
-            command=self.action_apply_gaming_tweaks
-        ).pack(side=tk.RIGHT)
+        render_tweak_grid(scroll_content, latency_tweak_defs, self.live_states, self.gaming_toggles, on_change_callback=lambda k, s: update_hero())
 
     # -------------------------------------------------------------
     # -------------------------------------------------------------
@@ -1923,11 +1994,14 @@ class ApexOptimizerApp:
             "Scan and safely eradicate gigabytes of leftover temporary files, installer caches, and crash dumps."
         )
 
-        ctrl_card = ModernCard(self.content_container)
+        ctrl_card = ModernCard(self.content_container, pady=12)
         ctrl_card.pack(fill=tk.X, pady=(0, 12))
 
+        top_ctrl = tk.Frame(ctrl_card, bg=THEME["bg_card"])
+        top_ctrl.pack(fill=tk.X)
+
         self.cleaner_summary_lbl = tk.Label(
-            ctrl_card,
+            top_ctrl,
             text="Click 'Scan Junk' to calculate exact reclaimable storage space.",
             font=(FONT_FAMILY, 9, "bold"),
             fg=THEME["accent_cyan"],
@@ -1935,20 +2009,53 @@ class ApexOptimizerApp:
         )
         self.cleaner_summary_lbl.pack(side=tk.LEFT)
 
+        btn_box = tk.Frame(top_ctrl, bg=THEME["bg_card"])
+        btn_box.pack(side=tk.RIGHT)
+
+        tk.Button(
+            btn_box,
+            text="Select All",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card_alt"],
+            relief="flat",
+            cursor="hand2",
+            padx=8,
+            pady=4,
+            command=lambda: [v.set(True) for v in self.cleanup_checks.values()]
+        ).pack(side=tk.LEFT, padx=(0, 6))
+
+        tk.Button(
+            btn_box,
+            text="Deselect All",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card_alt"],
+            relief="flat",
+            cursor="hand2",
+            padx=8,
+            pady=4,
+            command=lambda: [v.set(False) for v in self.cleanup_checks.values()]
+        ).pack(side=tk.LEFT, padx=(0, 8))
+
         scan_btn = tk.Button(
-            ctrl_card,
+            btn_box,
             text="🔍 SCAN JUNK FILES",
-            font=(FONT_FAMILY, 9, "bold"),
+            font=(FONT_FAMILY, 8, "bold"),
             fg="#FFFFFF",
             bg=THEME["primary"],
             activebackground=THEME["primary_hover"],
             relief="flat",
             cursor="hand2",
-            padx=14,
-            pady=6,
+            padx=12,
+            pady=4,
             command=self.action_scan_junk
         )
-        scan_btn.pack(side=tk.RIGHT)
+        scan_btn.pack(side=tk.LEFT)
+
+        # Visual Storage Breakdown Bar
+        self.storage_meter = ttk.Progressbar(ctrl_card, mode="determinate", length=600, style="TProgressbar")
+        self.storage_meter.pack(fill=tk.X, pady=(10, 2))
 
         scroll_canvas, scroll_content = self.create_scrollable_container()
 
@@ -2419,6 +2526,138 @@ class ApexOptimizerApp:
     # -------------------------------------------------------------
     # UI Helper Functions
     # -------------------------------------------------------------
+    def render_section_hero(self, title: str, subtitle: str, tweak_keys: List[str], toggle_dict: Dict, on_apply: Callable, icon: str = "⚡"):
+        """
+        Renders a state-of-the-art Windows 11 Fluent Category Hero Banner with:
+        - Category Title and Description
+        - Live Progress Bar (X of Y Optimizations Active)
+        - 1-Click Quick Action Buttons: '✨ Recommend All', '↩️ Reset Defaults', '💾 Save & Apply'
+        """
+        hero_card = ModernCard(self.content_container, pady=12, padx=16)
+        hero_card.pack(fill=tk.X, pady=(0, 12))
+
+        top_row = tk.Frame(hero_card, bg=THEME["bg_card"])
+        top_row.pack(fill=tk.X)
+
+        title_box = tk.Frame(top_row, bg=THEME["bg_card"])
+        title_box.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        h_title = tk.Label(
+            title_box,
+            text=f"{icon}  {title}",
+            font=(FONT_FAMILY, 13, "bold"),
+            fg=THEME["text_main"],
+            bg=THEME["bg_card"]
+        )
+        h_title.pack(anchor="w")
+
+        h_sub = tk.Label(
+            title_box,
+            text=subtitle,
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card"],
+            wraplength=520,
+            justify="left"
+        )
+        h_sub.pack(anchor="w", pady=(2, 0))
+
+        # Quick Actions on Right
+        actions_frame = tk.Frame(top_row, bg=THEME["bg_card"])
+        actions_frame.pack(side=tk.RIGHT)
+
+        def recommend_all():
+            for k in tweak_keys:
+                if k in toggle_dict:
+                    target = False if k == "fast_startup" else True
+                    toggle_dict[k].set(target)
+            update_hero_meter()
+
+        def reset_all():
+            for k in tweak_keys:
+                if k in toggle_dict:
+                    target = True if k == "fast_startup" else False
+                    toggle_dict[k].set(target)
+            update_hero_meter()
+
+        rec_btn = tk.Button(
+            actions_frame,
+            text="✨ Recommend All",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["accent_cyan"],
+            bg=THEME["bg_card_alt"],
+            activebackground=THEME["border"],
+            activeforeground=THEME["text_main"],
+            relief="flat",
+            cursor="hand2",
+            padx=10,
+            pady=5,
+            command=recommend_all
+        )
+        rec_btn.pack(side=tk.LEFT, padx=(0, 6))
+
+        rst_btn = tk.Button(
+            actions_frame,
+            text="↩️ Reset Defaults",
+            font=(FONT_FAMILY, 8),
+            fg=THEME["text_muted"],
+            bg=THEME["bg_card_alt"],
+            activebackground=THEME["border"],
+            activeforeground=THEME["text_main"],
+            relief="flat",
+            cursor="hand2",
+            padx=10,
+            pady=5,
+            command=reset_all
+        )
+        rst_btn.pack(side=tk.LEFT, padx=(0, 6))
+
+        apply_btn = tk.Button(
+            actions_frame,
+            text="💾 Save & Apply",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg="#FFFFFF",
+            bg=THEME["primary"],
+            activebackground=THEME["primary_hover"],
+            relief="flat",
+            cursor="hand2",
+            padx=12,
+            pady=5,
+            command=on_apply
+        )
+        apply_btn.pack(side=tk.LEFT)
+
+        # Bottom Row: Category Progress Meter
+        progress_row = tk.Frame(hero_card, bg=THEME["bg_card"])
+        progress_row.pack(fill=tk.X, pady=(10, 0))
+
+        meter_lbl = tk.Label(
+            progress_row,
+            text="Calculating status...",
+            font=(FONT_FAMILY, 8, "bold"),
+            fg=THEME["primary_light"],
+            bg=THEME["bg_card"]
+        )
+        meter_lbl.pack(side=tk.LEFT)
+
+        prog_bar = ttk.Progressbar(progress_row, mode="determinate", length=220, style="TProgressbar")
+        prog_bar.pack(side=tk.RIGHT)
+
+        def update_hero_meter():
+            active_count = 0
+            total_count = len(tweak_keys)
+            for k in tweak_keys:
+                if k in toggle_dict:
+                    val = toggle_dict[k].get()
+                    if (k == "fast_startup" and not val) or (k != "fast_startup" and val):
+                        active_count += 1
+            pct = int((active_count / total_count * 100)) if total_count > 0 else 0
+            meter_lbl.config(text=f"CATEGORY OPTIMIZATION: {active_count} of {total_count} Active ({pct}%)")
+            prog_bar['value'] = pct
+
+        hero_card.after(50, update_hero_meter)
+        return update_hero_meter
+
     def render_section_header(self, title: str, subtitle: str):
         title_frame = tk.Frame(self.content_container, bg=THEME["bg_app"])
         title_frame.pack(fill=tk.X, pady=(0, 14))
@@ -2638,6 +2877,10 @@ class ApexOptimizerApp:
 
             summary = f"Scan Complete! Found {self.engine.format_bytes(total_bytes)} of reclaimable junk files."
             self.cleaner_summary_lbl.config(text=summary)
+            if hasattr(self, 'storage_meter') and self.storage_meter.winfo_exists():
+                total_mb = total_bytes / (1024 * 1024)
+                pct = min(100, max(5, int((total_mb / 2000.0) * 100))) if total_mb > 0 else 0
+                self.storage_meter['value'] = pct
             self.set_status(summary, is_busy=False)
         threading.Thread(target=worker, daemon=True).start()
 
