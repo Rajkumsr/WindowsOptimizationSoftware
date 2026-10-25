@@ -22,7 +22,9 @@ def render_system_tweaks(app):
         ("block_oem_bloat", "Block OEM Firmware WPBT", "Blocks hardware vendors and UEFI firmware from automatically installing bundled promotional software at boot.", "FIRMWARE", "🛡️ WPBT ROOTKIT BLOCKED"),
         ("disable_p2p_update", "Disable P2P Update Seeding", "Stops Windows Delivery Optimization from using your upstream internet connection to upload updates to others.", "BANDWIDTH", "🌐 ZERO UPLOAD DRAIN"),
         ("f8_boot_menu", "Enable Classic F8 Boot Menu", "Restores the legacy F8 boot selection menu for easy recovery and Safe Mode access.", "BOOT", "⌨️ INSTANT SAFE MODE"),
-        ("disable_hibernation", "Disable Hibernation (Desktop)", "Deletes hiberfil.sys to reclaim disk space equivalent to your total RAM size (desktops only).", "STORAGE", "💾 RECLAIM RAM-SIZE SSD")
+        ("disable_hibernation", "Disable Hibernation (Desktop)", "Deletes hiberfil.sys to reclaim disk space equivalent to your total RAM size (desktops only).", "STORAGE", "💾 RECLAIM RAM-SIZE SSD"),
+        ("svchost_split_threshold", "SvcHost Process Consolidation", "Groups individual Windows service host processes together on systems with <16GB RAM to reclaim 300MB+ physical memory.", "MEMORY", "🧠 SAVE 300MB+ RAM"),
+        ("defender_cpu_cap", "Defender Background Scan CPU Cap", "Restricts Windows Defender scheduled background file scans to 25% CPU core usage to prevent 100% CPU system lockups.", "ANTIVIRUS", "🛡️ 25% CPU LIMIT")
     ]
 
     power_tweak_defs = [

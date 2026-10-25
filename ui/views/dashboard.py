@@ -66,17 +66,20 @@ def render_dashboard(app):
     c2 = ModernCard(grid_frame)
     c2.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
     tk.Label(c2, text="⚡  Processor (CPU)", font=(FONT_FAMILY, 8, "bold"), fg=THEME["accent_cyan"], bg=THEME["bg_card"]).pack(anchor="w")
-    app.dash_cpu_lbl = tk.Label(c2, text=f"{app.hw_info.get('cpu_percent', 0):.0f}% Load", font=(FONT_FAMILY, 13, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"])
+    cpu_initial = app.hw_info.get('cpu_percent', 0.0)
+    cpu_text = f"{cpu_initial:.0f}% Load" if cpu_initial > 0 else "Analyzing..."
+    app.dash_cpu_lbl = tk.Label(c2, text=cpu_text, font=(FONT_FAMILY, 13, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"])
     app.dash_cpu_lbl.pack(anchor="w", pady=(2, 0))
-    tk.Label(c2, text=app.hw_info["cpu_name"], font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"], wraplength=170, justify="left").pack(anchor="w", pady=(2, 0))
+    tk.Label(c2, text=app.hw_info.get("cpu_name", "Processor"), font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"], wraplength=170, justify="left").pack(anchor="w", pady=(2, 0))
 
     # 3. RAM Card (Live)
     c3 = ModernCard(grid_frame)
     c3.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 8))
     tk.Label(c3, text="🧠  Physical Memory (Live)", font=(FONT_FAMILY, 8, "bold"), fg=THEME["success"], bg=THEME["bg_card"]).pack(anchor="w")
-    app.ram_val_lbl = tk.Label(c3, text=f"{app.hw_info['free_ram']} Free of {app.hw_info['total_ram']}", font=(FONT_FAMILY, 11, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"], wraplength=170, justify="left")
+    app.ram_val_lbl = tk.Label(c3, text=f"{app.hw_info.get('free_ram', '0 GB')} Free of {app.hw_info.get('total_ram', '0 GB')}", font=(FONT_FAMILY, 11, "bold"), fg=THEME["text_main"], bg=THEME["bg_card"], wraplength=170, justify="left")
     app.ram_val_lbl.pack(anchor="w", pady=(4, 0))
-    tk.Label(c3, text=f"{app.hw_info['ram_percent']} Utilized", font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"]).pack(anchor="w", pady=(2, 0))
+    app.dash_ram_pct_lbl = tk.Label(c3, text=f"{app.hw_info.get('ram_percent', '0%')} Utilized", font=(FONT_FAMILY, 8), fg=THEME["text_muted"], bg=THEME["bg_card"])
+    app.dash_ram_pct_lbl.pack(anchor="w", pady=(2, 0))
 
     # 4. Uptime & Chassis Card
     c4 = ModernCard(grid_frame)

@@ -41,5 +41,7 @@ ALL_SEARCHABLE_TWEAKS = [
     ("network_gaming_latency", "gaming", "Lower Gaming Ping (Disable Nagle's Algorithm)", "Eliminates network packet buffering delay for instantaneous packet delivery in online games."),
     ("processor_eco", "system", "Processor Eco Boost Capping on Battery", "Limits CPU turbo boost to 85% on battery to eliminate thermal spikes and extend runtime."),
     ("pcie_aspm", "system", "PCIe Link State Power Management (ASPM)", "Puts idle PCIe lanes into maximum power savings on DC power."),
-    ("fast_startup", "system", "Disable Windows Fast Startup", "Stops hybrid kernel hibernation and eliminates 3-5% overnight battery discharge.")
+    ("fast_startup", "system", "Disable Windows Fast Startup", "Stops hybrid kernel hibernation and eliminates 3-5% overnight battery discharge."),
+    ("svchost_split_threshold", "system", "Consolidate SvcHost Processes", "Groups Windows service host processes together on systems with <16GB RAM to save 300MB+ memory."),
+    ("defender_cpu_cap", "system", "Cap Windows Defender Scan CPU Load", "Limits Defender background antivirus scans to 25% CPU core load to prevent system freezing.")
 ]

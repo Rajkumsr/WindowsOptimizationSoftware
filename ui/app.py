@@ -642,38 +642,48 @@ class ApexOptimizerApp:
     # -------------------------------------------------------------
     def schedule_live_telemetry(self):
         def _update():
-            # 1. Update Persistent Sidebar Live Mini Telemetry Dock (Fast & Cached)
+            # 1. Update Persistent Sidebar Live Mini Telemetry Dock & Dashboard
             try:
+                hw = self.engine.get_hardware_info()
+                self.hw_info = hw
+                tot_ram = hw.get("total_ram", "16 GB")
+                free_ram = hw.get("free_ram", "8 GB")
+                ram_pct_str = hw.get("ram_percent", "50%").replace("%", "").strip()
+                try:
+                    ram_val = float(ram_pct_str)
+                except Exception:
+                    ram_val = 50.0
+                cpu_val = hw.get("cpu_percent", 0.0)
+
+                # Update Persistent Sidebar Live Mini Telemetry Dock
                 if hasattr(self, 'sidebar_ram_lbl') and self.sidebar_ram_lbl.winfo_exists():
-                    hw = self.engine.get_hardware_info()
-                    tot_ram = hw.get("total_ram", "16 GB")
-                    free_ram = hw.get("free_ram", "8 GB")
-                    ram_pct_str = hw.get("ram_percent", "50%").replace("%", "").strip()
-                    try:
-                        ram_val = float(ram_pct_str)
-                    except Exception:
-                        ram_val = 50.0
-                    cpu_val = hw.get("cpu_percent", 0.0)
                     self.sidebar_ram_lbl.config(text=f"RAM: {free_ram} Free of {tot_ram} ({ram_val:.0f}%)")
                     self.sidebar_ram_bar['value'] = ram_val
                     self.sidebar_sub_lbl.config(text=f"CPU: {cpu_val:.0f}% Load • Drive: {hw.get('system_drive', 'C:')}")
+
+                # Update Dashboard Widgets if active
+                if self.active_tab == "dashboard":
+                    if hasattr(self, 'ram_val_lbl') and self.ram_val_lbl.winfo_exists():
+                        self.ram_val_lbl.config(text=f"{free_ram} Free of {tot_ram}")
+                    if hasattr(self, 'dash_ram_pct_lbl') and self.dash_ram_pct_lbl.winfo_exists():
+                        self.dash_ram_pct_lbl.config(text=f"{hw.get('ram_percent', '0%')} Utilized")
+                    if hasattr(self, 'dash_cpu_lbl') and self.dash_cpu_lbl.winfo_exists():
+                        self.dash_cpu_lbl.config(text=f"{cpu_val:.0f}% Load")
+                        if cpu_val >= 85:
+                            self.dash_cpu_lbl.config(fg=THEME["danger"])
+                        elif cpu_val >= 65:
+                            self.dash_cpu_lbl.config(fg=THEME["warning"])
+                        else:
+                            self.dash_cpu_lbl.config(fg=THEME["text_main"])
+                    if hasattr(self, 'dash_uptime_lbl') and self.dash_uptime_lbl.winfo_exists():
+                        self.dash_uptime_lbl.config(text=f"Uptime: {hw.get('uptime', 'Active')}")
+                    if hasattr(self, 'dash_score_lbl') and self.dash_score_lbl.winfo_exists():
+                        score_info = self.engine.calculate_health_score(self.live_states)
+                        self.dash_score_lbl.config(text=f"{score_info['score']}%", fg=score_info["color"])
+                        if hasattr(self, 'dash_rating_lbl') and self.dash_rating_lbl.winfo_exists():
+                            self.dash_rating_lbl.config(text=score_info["rating"], fg=score_info["color"])
             except Exception:
                 pass
-
-            # 2. Update Dashboard Widgets if active
-            if self.active_tab == "dashboard":
-                hw = self.engine.get_hardware_info()
-                if hasattr(self, 'ram_val_lbl') and self.ram_val_lbl.winfo_exists():
-                    self.ram_val_lbl.config(text=f"{hw['free_ram']} Free of {hw['total_ram']}")
-                if hasattr(self, 'dash_cpu_lbl') and self.dash_cpu_lbl.winfo_exists():
-                    self.dash_cpu_lbl.config(text=f"{hw.get('cpu_percent', 0):.0f}% Load")
-                if hasattr(self, 'dash_uptime_lbl') and self.dash_uptime_lbl.winfo_exists():
-                    self.dash_uptime_lbl.config(text=f"Uptime: {hw.get('uptime', 'Active')}")
-                if hasattr(self, 'dash_score_lbl') and self.dash_score_lbl.winfo_exists():
-                    score_info = self.engine.calculate_health_score(self.live_states)
-                    self.dash_score_lbl.config(text=f"{score_info['score']}%", fg=score_info["color"])
-                    if hasattr(self, 'dash_rating_lbl') and self.dash_rating_lbl.winfo_exists():
-                        self.dash_rating_lbl.config(text=score_info["rating"], fg=score_info["color"])
 
             # Check Battery Health Alarm if enabled
             if getattr(self, "battery_alarm_enabled", False):
