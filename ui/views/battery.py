@@ -465,9 +465,9 @@ def action_generate_battery_report(app):
     def worker():
         app.set_status("Generating official Windows battery diagnostics...", is_busy=True)
         ok, res = app.engine.generate_battery_report()
-        app.set_status("Battery report generated.", is_busy=False)
+        app.set_status("Battery report generated." if ok else "Battery report generation failed.", is_busy=False)
         if not ok:
-            messagebox.showerror("Battery Report Error", f"Failed to generate battery report: {res}")
+            app.root.after(0, lambda: messagebox.showerror("Battery Report Error", f"Failed to generate battery report: {res}"))
     threading.Thread(target=worker, daemon=True).start()
 
 

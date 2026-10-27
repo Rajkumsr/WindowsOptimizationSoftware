@@ -612,6 +612,14 @@ class ApexOptimizerApp:
             self.render_developer_page()
 
     def set_status(self, text: str, is_busy: bool = False):
+        self.run_on_ui_thread(lambda: self._set_status(text, is_busy))
+
+    def run_on_ui_thread(self, callback: Callable[[], None]):
+        self.root.after(0, callback)
+
+    def _set_status(self, text: str, is_busy: bool = False):
+        if not self.root.winfo_exists():
+            return
         self.status_label.config(text=text)
         if is_busy:
             self.progress_bar.start(10)

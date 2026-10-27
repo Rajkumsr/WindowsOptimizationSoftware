@@ -173,7 +173,9 @@ class BaseEngine:
             hive = "HKLM" if root == winreg.HKEY_LOCAL_MACHINE else "HKCU"
             type_str = "REG_DWORD" if val_type == winreg.REG_DWORD else "REG_SZ"
             cmd = f'reg.exe add "{hive}\\{subkey}" /v "{name}" /t {type_str} /d "{value}" /f'
-            code, _ = self.run_cmd(cmd)
+            code, out = self.run_cmd(cmd)
+            if code != 0:
+                self.log(f"Failed to set registry value {hive}\\{subkey}\\{name}: {out}", "ERROR")
             return code == 0
 
     def delete_reg_value(self, root, subkey: str, name: str) -> bool:
@@ -185,7 +187,9 @@ class BaseEngine:
             return True
         except Exception:
             hive = "HKLM" if root == winreg.HKEY_LOCAL_MACHINE else "HKCU"
-            code, _ = self.run_cmd(f'reg.exe delete "{hive}\\{subkey}" /v "{name}" /f')
+            code, out = self.run_cmd(f'reg.exe delete "{hive}\\{subkey}" /v "{name}" /f')
+            if code != 0:
+                self.log(f"Failed to delete registry value {hive}\\{subkey}\\{name}: {out}", "ERROR")
             return code == 0
 
 
@@ -229,5 +233,4 @@ class BaseEngine:
                     # Always unmount cleanly
                     self.run_cmd('reg.exe unload "HKU\\APEX_DEFAULT"')
                 self.log("Default User Hive unmounted successfully.", "SUCCESS")
-
 

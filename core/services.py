@@ -3,7 +3,8 @@ Apex Windows Optimizer - Windows Services Optimizer Mixin
 Provides Windows services catalog discovery and safe optimization for unnecessary background services.
 """
 
-from typing import Dict, List, Tuple, Any
+import re
+from typing import Dict, List, Tuple
 
 
 class ServicesMixin:
@@ -40,26 +41,35 @@ class ServicesMixin:
         
         ps_commands = []
         for svc, mode in selected_services:
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+", svc) or mode not in {"disabled", "demand", "auto"}:
+                self.log(f"Rejected invalid service configuration: {svc!r} / {mode!r}", "ERROR")
+                continue
+
             startup_type = "Disabled" if mode == "disabled" else ("Manual" if mode == "demand" else "Automatic")
             ps_commands.append(f"""
             try {{
-                $s = Get-Service -Name '{svc}' -ErrorAction SilentlyContinue
-                if ($s) {{
-                    Set-Service -Name '{svc}' -StartupType {startup_type} -ErrorAction SilentlyContinue
-                    if ('{mode}' -eq 'disabled' -and $s.Status -eq 'Running') {{
-                        Stop-Service -Name '{svc}' -Force -ErrorAction SilentlyContinue
+                $s = Get-Service -Name '{svc}' -ErrorAction Stop
+                Set-Service -Name '{svc}' -StartupType {startup_type} -ErrorAction Stop
+                if ('{mode}' -eq 'disabled' -and $s.Status -eq 'Running') {{
+                    Stop-Service -Name '{svc}' -Force -ErrorAction Stop
                     }}
-                    Write-Output "OK:{svc}"
-                }}
+                Write-Output "OK:{svc}"
             }} catch {{
-                Write-Output "ERR:{svc}"
+                Write-Output "ERR:{svc}:$($_.Exception.Message)"
             }}
             """)
+
+        if not ps_commands:
+            return 0
 
         full_ps = "\n".join(ps_commands)
         code, out = self.run_ps(full_ps)
         success = out.count("OK:")
-        self.log(f"Configured {success} services successfully.", "SUCCESS")
+        for line in out.splitlines():
+            if line.startswith("ERR:"):
+                self.log(f"Service configuration failed: {line[4:]}", "ERROR")
+        if code != 0:
+            self.log(f"Service configuration command failed with exit code {code}.", "ERROR")
+        self.log(f"Configured {success} of {len(ps_commands)} services successfully.", "SUCCESS" if success == len(ps_commands) and code == 0 else "WARNING")
         return success
-
 

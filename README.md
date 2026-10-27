@@ -10,13 +10,13 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **Animated Donut Health Gauge**: Swept-arc circular health gauge rendered in your native Windows Accent color with dynamic score interpolation (0–100%) and hygiene ratings (`OPTIMAL`, `GOOD`, `FAIR`, `OPTIMIZING`).
 * **🎛️ 1-Click Scenario Preset Profiles**: Instant one-click profiles tailored for common computer scenarios:
   * **🎮 Gaming & FPS Mode**: Hardware GPU Scheduling (HAGS), MMCSS audio/network scheduling, and Ultimate Performance power scheme.
-  * **🔋 Battery Saver Mode**: Limits CPU boost to 85% on DC, activates PCIe ASPM link power management, and halts fast-startup overnight drain.
+  * **🔋 Battery Saver Mode**: Sets the maximum processor state to 85% on DC, enables PCIe ASPM, and disables Fast Startup. Battery-life effects vary by device and usage.
   * **🛡️ Maximum Privacy**: Shuts down telemetry, DiagTrack, CEIP, Microsoft Recall AI tracking, and Bing web search.
-  * **🔄 Windows Defaults**: Reverts all managed tweaks back to stock factory Windows settings.
+  * **🔄 Windows Defaults**: Reverts the system, gaming, and power settings covered by that preset. It does not undo app removals or all privacy, service, and shell changes.
 * **Real-time Live Telemetry**: Instant CPU load percentage, physical RAM usage (free, total, and percentage load), system drive, active chassis detection (`🖥️ Desktop PC` vs `💻 Laptop`), and precise system uptime (`GetTickCount64`).
-* **⚡ 1-Click Instant System Boost**: Flushes process working sets and Standby cache via Win32 `EmptyWorkingSet` (instantly freeing 1 GB – 3 GB of trapped memory), sweeps temporary clutter, and refreshes DNS cache in a single click.
-* **One-Click Quick Optimization**: Applies recommended safety tweaks across performance, privacy, and shell settings with automated rollback snapshot creation.
-* **Instant Utilities**: Purge Standby RAM, flush DNS cache, restart Windows Explorer shell, export registry backups, and create System Restore points.
+* **⚡ 1-Click Instant System Boost**: Requests Windows to trim process working sets, sweeps accessible temporary files, and refreshes DNS cache. The amount of memory or storage reclaimed depends on the system and running apps.
+* **One-Click Quick Optimization**: Applies the selected performance, privacy, and shell settings after attempting to create a System Restore point or registry-export fallback. A registry export is a backup, not an automatic rollback.
+* **Instant Utilities**: Request a process working-set trim, flush DNS cache, restart Windows Explorer shell, export registry backups, and create System Restore points.
 
 ### 2. 🎨 Native Windows Theme & Accent Palette Auto-Sync
 * **100% Dynamic Windows Colorization**: Extracts colors directly from Windows via `HKCU\Software\Microsoft\Windows\CurrentVersion\Explorer\Accent\AccentPalette` (8 Fluent UI shades), DWM Colorization APIs, and Win32 `GetSysColor` metrics.
@@ -32,7 +32,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 
 ### 5. ⚡ Real State Detection & Bi-Directional Toggles
 * **Live System State Inspection**: On launch, the software inspects the Windows Registry to determine what is already `[OPTIMIZED]` vs `[DEFAULT]`.
-* **Bi-Directional Revert / Undo**: Turning any toggle switch `OFF` restores standard Windows default configurations cleanly.
+* **Bi-Directional Revert / Undo**: Turning a toggle switch `OFF` restores the tool's configured default for that setting; this may not recover a custom value that existed before Apex changed it.
 * **Multi-User Profile Deployment**: Mounts `C:\Users\Default\NTUSER.DAT` into `HKU` so customizations automatically deploy to **all current and future user accounts**.
 
 ### 6. 🎯 High-DPI Display Scaling Awareness
@@ -44,11 +44,11 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **Foreground Responsiveness**: Sets 90% CPU priority for active applications and games (`SystemResponsiveness` = `10`).
 * **Accelerated Shutdown**: Shortens service termination delay to 5 seconds (`WaitToKillServiceTimeout` = `5000`).
 * **NTFS Long File Paths**: Eliminates the legacy MAX_PATH 260-character limitation.
-* **Firmware WPBT & OEM Bloat Blocking**: Prevents motherboard BIOS/UEFI firmware from injecting promotional software into Windows at boot.
-* **IRP Stack Size Tuning**: Optimizes server communication buffer size (`IRPStackSize` = `30`) for high-throughput LAN file sharing.
+* **Device Metadata Policy**: Prevents Windows from downloading device metadata from Microsoft; this setting does not block firmware WPBT software.
+* **IRP Stack Size Configuration**: Sets the server `IRPStackSize` registry value to `30`; performance impact depends on system configuration.
 * **Disable P2P Update Seeding**: Prevents Delivery Optimization from using your upstream bandwidth to seed updates to external PCs.
 * **F8 Legacy Boot Menu**: Restores classic boot options for instant recovery.
-* **Desktop Hibernation Control**: Disables `hiberfil.sys` on desktop systems to reclaim disk space equivalent to total RAM size.
+* **Desktop Hibernation Control**: Can disable hibernation on desktop systems and remove `hiberfil.sys`; the disk space recovered varies by configuration.
 
 ### 8. 🛡️ Privacy & Telemetry
 * **Diagnostic Data & CEIP**: Disables DiagTrack, feedback notifications, error reporting telemetry, and Customer Experience Improvement tasks.
@@ -91,7 +91,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 * **HPET Reset**: Removes explicit timer overrides to prevent micro-stuttering.
 
 ### 13. 🧹 Deep Disk & Cache Cleaner (Real BeardSweeper)
-* Calculates exact reclaimable storage space before cleaning:
+* Estimates file sizes before cleaning (actual reclaimable space may differ; locked files can be skipped). WinSxS cleanup is performed through DISM and is not assigned a fixed size estimate:
   * Windows System Temp & User Profile Temp
   * Windows Update Download Cache (`SoftwareDistribution\Download`)
   * DirectX Shader Cache (`D3DSCache`)
@@ -102,9 +102,9 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 ### 14. 🔋 Universal Battery & Power Conservation Suite (Laptops)
 * **Active Windows Power Plan & Vendor Scheme Detection**: Live display of your currently active Windows power scheme (e.g., `AMD Ryzen™ Balanced`, `Balanced`, `High Performance`), displaying full GUIDs, custom vendor badges (`🔥 AMD RYZEN™ CPPC TUNED`), and 1-click plan switcher buttons.
 * **Real-Time Battery & Power Telemetry**: Instant battery percentage, AC adapter status, charging state, and automatic chassis classification (`🖥️ Desktop PC` vs `💻 Laptop`).
-* **Processor Eco Boost Capping on DC**: Limits CPU boost frequency to 85% and optimizes Energy-Performance Preference (`PERFEPP`) on battery power to eliminate thermal spikes, quiet fan noise, and extend battery runtime by up to 25%.
+* **Processor Eco Boost Capping on DC**: Limits the configured maximum processor state on battery and adjusts Energy-Performance Preference (`PERFEPP`). Effects on temperature, fan noise, and battery runtime depend on the hardware and workload.
 * **PCIe Link State Power Management (ASPM)**: Activates aggressive Active State Power Management (`powercfg /setdcvalueindex SCHEME_CURRENT SUB_PCIEXPRESS ASPM 2`) to power down idle PCIe bus lanes and NVMe storage on DC.
-* **Fast Startup Standby Drain Prevention**: Disables hybrid kernel hibernation (`HiberbootEnabled = 0`) to stop 3-5% phantom battery drain overnight while laptops are powered off.
+* **Fast Startup Configuration**: Can disable hybrid startup (`HiberbootEnabled = 0`). This changes startup behavior; any effect on overnight battery drain depends on the device.
 * **Smart 80% / 20% Battery Health Audio & Toast Guard**: Live background monitoring guard that chimes and notifies you when charging hits 80% (to unplug and preserve lithium-ion cell longevity) or drops below 20% (to avoid deep discharge wear).
 * **Official Windows Battery Health & Wear Diagnostics**: One-click generation of the detailed Microsoft Battery Lifecycle & Capacity Degradation report (`powercfg /batteryreport`) launched automatically in your browser.
 
@@ -116,7 +116,7 @@ A modern, high-performance, dark-themed Windows optimization and debloating desk
 
 ### 17. 📌 System Tray Mini-Mode & Background Monitoring
 * **Background Notification Area Integration**: Minimizes seamlessly to the Windows System Tray with a high-resolution dark icon (`pystray`).
-* **Quick Action Tray Menu**: Right-click the tray icon to execute *1-Click Instant Boost & Purge RAM*, open the *Battery & Power Saver* suite, or reopen the application.
+* **Quick Action Tray Menu**: Right-click the tray icon to run quick maintenance, open the *Battery & Power Saver* suite, or reopen the application.
 * **Smart Background Guard**: Keeps battery health alerts (80% / 20% lithium cell guard) active without keeping the main GUI window on your screen.
 * **Dedicated Tray Controls**: Header "📌 Minimize to Tray" button and automatic minimize-on-close protection to avoid accidental process termination.
 
@@ -137,14 +137,36 @@ python -m ui.app
 ```
 *(Uses Python's standard library `tkinter`, `winreg`, and `ctypes`)*
 
+### Headless Automation
+Run one or more operations without opening the GUI:
+```powershell
+python main.py --optimize --gaming
+python main.py --cleanup
+python main.py --winget --restart
+```
+The cleanup option runs every listed cleanup target, including DISM component-store cleanup. The process returns a non-zero exit code for reported operation errors; `--restart` is skipped if an operation reports an error.
+
+### Run Tests
+Run the Windows-compatible regression tests with:
+```powershell
+python -m unittest discover -s tests -v
+```
+
 ### 📁 Project Architecture
 ```text
 WindowsOptimizationSoftware/
 ├── assets/                  # 256x256 high-resolution application icons
 │   └── app_icon.ico
 ├── core/                    # Backend Optimization & OS Telemetry Engine
-│   ├── __init__.py
-│   └── optimizer.py         # Win32 APIs, Registry tweaker, WMI & Power metrics
+│   ├── base.py               # Registry, command, logging, and profile-hive helpers
+│   ├── cleanup.py            # Disk cleanup and WinGet operations
+│   ├── debloat.py            # AppX package and scheduled-task operations
+│   ├── diagnostics.py        # Hardware telemetry, health score, and quick boost
+│   ├── gaming.py             # Gaming and GPU settings
+│   ├── optimizer.py          # Combined engine built from feature mixins
+│   ├── power.py              # Battery and power-plan operations
+│   ├── services.py           # Windows service configuration
+│   └── tweaks.py             # System, privacy, and Explorer settings
 ├── ui/                      # Modern Tkinter Presentation Layer
 │   ├── __init__.py
 │   ├── app.py               # Main window controller, telemetry loop & tabs
@@ -152,6 +174,7 @@ WindowsOptimizationSoftware/
 │   ├── components.py        # DonutGauge, ToastManager, ModernCard, ToggleSwitch
 │   ├── tray.py              # System Tray background menu & notification manager
 │   └── search_data.py       # Live Ctrl+F search index registry
+├── tests/                   # Standard-library unittest regression tests
 ├── main.py                  # Application entry point & automated UAC elevation
 ├── build_exe.py             # Standalone binary compiler (PyInstaller)
 ├── file_version_info.txt    # Windows PE version and developer metadata
@@ -178,4 +201,3 @@ The compiled binary with embedded high-resolution icon and auto-UAC elevation ma
 
 * **GitHub**: [github.com/Rajkumsr](https://github.com/Rajkumsr)
 * **LinkedIn**: [linkedin.com/in/rajkumar-patil-2b13a5180](https://www.linkedin.com/in/rajkumar-patil-2b13a5180)
-

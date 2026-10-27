@@ -60,16 +60,9 @@ def clean_previous_builds(project_root):
     """Clean leftover build artifacts."""
     print("[3/5] Cleaning prior build cache...")
     build_dir = os.path.join(project_root, "build")
-    dist_dir = os.path.join(project_root, "dist")
-    spec_file = os.path.join(project_root, "ApexWindowsOptimizer.spec")
 
     if os.path.exists(build_dir):
         shutil.rmtree(build_dir, ignore_errors=True)
-    if os.path.exists(spec_file):
-        try:
-            os.remove(spec_file)
-        except Exception:
-            pass
     print("      [OK] Clean workspace ready.")
 
 def build_executable(project_root, icon_path):
@@ -84,6 +77,9 @@ def build_executable(project_root, icon_path):
         "--onefile",
         "--uac-admin",
         "--name", "ApexWindowsOptimizer",
+        "--specpath", os.path.join(project_root, "build"),
+        "--workpath", os.path.join(project_root, "build", "pyinstaller"),
+        "--distpath", os.path.join(project_root, "dist"),
         "--icon", icon_path,
         "--paths", project_root,
         "--add-data", f"{os.path.join(project_root, 'assets')};assets",

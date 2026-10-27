@@ -165,7 +165,7 @@ def action_apply_services(app):
         app.set_status("Configuring service startup modes...", is_busy=True)
         count = app.engine.optimize_services(selected)
         app.set_status(f"Services configured ({count} updated).", is_busy=False)
-        app.root.after(0, lambda: app.show_toast("Services Configured", f"Successfully updated {count} Windows service startup modes.", "success"))
+        app.root.after(0, lambda: app.show_toast("Services Configured", f"{count} Windows service startup mode(s) configured. See the activity log for any failures.", "info"))
     threading.Thread(target=worker, daemon=True).start()
 
 
@@ -332,7 +332,7 @@ def action_remove_bloatware(app):
         app.set_status("Debloating packages...", is_busy=True)
         count = app.engine.remove_appx_packages(patterns)
         app.set_status(f"Debloat complete ({count} removed).", is_busy=False)
-        messagebox.showinfo("Apex Optimizer", f"Completed removal of selected bloatware packages ({count} removed).")
+        app.root.after(0, lambda: messagebox.showinfo("Apex Optimizer", f"Completed processing selected packages ({count} package pattern(s) reported successful). Check the activity log for details."))
     threading.Thread(target=worker, daemon=True).start()
 
 
@@ -344,7 +344,7 @@ def render_disk_cleaner(app):
     render_section_header(
         app,
         "Deep Disk & Cache Cleaner",
-        "Scan and safely eradicate gigabytes of leftover temporary files, installer caches, and crash dumps."
+        "Estimate and remove selected temporary files, caches, and crash dumps. Some files may be locked or unavailable."
     )
 
     ctrl_card = ModernCard(app.content_container, pady=12)
@@ -355,7 +355,7 @@ def render_disk_cleaner(app):
 
     app.cleaner_summary_lbl = tk.Label(
         top_ctrl,
-        text="Click 'Scan Junk' to calculate exact reclaimable storage space.",
+        text="Click 'Scan Junk' to estimate file sizes. Actual reclaimed space may differ; DISM cleanup is not estimated.",
         font=(FONT_FAMILY, 9, "bold"),
         fg=THEME["accent_cyan"],
         bg=THEME["bg_card"]
@@ -481,22 +481,26 @@ def action_scan_junk(app):
     """Scans disk junk categories and updates sizes."""
     def worker():
         app.set_status("Scanning junk files...", is_busy=True)
-        app.cleaner_summary_lbl.config(text="Scanning file systems and caches...")
+        app.root.after(0, lambda: app.cleaner_summary_lbl.config(text="Scanning file systems and caches..."))
         sizes = app.engine.scan_cleanup_sizes()
         total_bytes = sum(b for b, _ in sizes.values())
         app.cleanup_sizes = sizes
 
-        for cid, (b, s_str) in sizes.items():
-            if cid in app.cleanup_labels:
-                color = THEME["success"] if b == 0 else THEME["warning"]
-                app.cleanup_labels[cid].config(text=s_str, fg=color)
+        summary = f"Scan estimate: {app.engine.format_bytes(total_bytes)} of file data; DISM reclaimable size is not estimated."
 
-        summary = f"Scan Complete! Found {app.engine.format_bytes(total_bytes)} of reclaimable junk files."
-        app.cleaner_summary_lbl.config(text=summary)
-        if hasattr(app, 'storage_meter') and app.storage_meter.winfo_exists():
-            total_mb = total_bytes / (1024 * 1024)
-            pct = min(100, max(5, int((total_mb / 2000.0) * 100))) if total_mb > 0 else 0
-            app.storage_meter['value'] = pct
+        def update_scan_results():
+            for cid, (b, s_str) in sizes.items():
+                if cid in app.cleanup_labels and app.cleanup_labels[cid].winfo_exists():
+                    color = THEME["success"] if b == 0 else THEME["warning"]
+                    app.cleanup_labels[cid].config(text=s_str, fg=color)
+            if app.cleaner_summary_lbl.winfo_exists():
+                app.cleaner_summary_lbl.config(text=summary)
+            if hasattr(app, "storage_meter") and app.storage_meter.winfo_exists():
+                total_mb = total_bytes / (1024 * 1024)
+                pct = min(100, max(5, int((total_mb / 2000.0) * 100))) if total_mb > 0 else 0
+                app.storage_meter["value"] = pct
+
+        app.root.after(0, update_scan_results)
         app.set_status(summary, is_busy=False)
     threading.Thread(target=worker, daemon=True).start()
 
@@ -508,12 +512,26 @@ def action_execute_cleanup(app):
         messagebox.showwarning("Apex Optimizer", "No categories selected for cleanup.")
         return
 
+    includes_winsxs = "winsxs" in selected_ids
+    details = (
+        "DISM will analyze and clean superseded Windows component files. "
+        "The amount of storage recovered varies and cannot be estimated in advance."
+        if includes_winsxs else
+        "Selected temporary files, caches, and reports will be deleted permanently."
+    )
+    if not messagebox.askyesno("Confirm Cleanup", f"Continue with the selected cleanup?\n\n{details}"):
+        return
+
     def worker():
         app.set_status("Cleaning selected junk files...", is_busy=True)
-        freed, s_str = app.engine.execute_cleanup(selected_ids)
-        app.set_status(f"Clean complete! Reclaimed {s_str}.", is_busy=False)
-        messagebox.showinfo("Apex Optimizer", f"Deep Clean complete!\nSuccessfully freed: {s_str}")
-        action_scan_junk(app)
+        _, s_str, failures = app.engine.execute_cleanup(selected_ids)
+        app.set_status(
+            f"Cleanup completed with {failures} failure(s)." if failures else f"Clean complete! Deleted {s_str} of file data.",
+            is_busy=False
+        )
+        dialog = messagebox.showwarning if failures else messagebox.showinfo
+        app.root.after(0, lambda: dialog("Apex Optimizer", f"Deep Clean complete.\nConfirmed file data deleted: {s_str}\nFailed items/operations: {failures}"))
+        app.root.after(0, lambda: action_scan_junk(app))
     threading.Thread(target=worker, daemon=True).start()
 
 
@@ -583,9 +601,11 @@ def action_check_winget(app):
     def worker():
         app.set_status("Querying WinGet for app updates...", is_busy=True)
         ok, out = app.engine.check_winget_updates()
-        app.updater_text.delete("1.0", tk.END)
-        app.updater_text.insert(tk.END, out + "\n")
-        app.set_status("WinGet query finished.", is_busy=False)
+        def display_updates():
+            app.updater_text.delete("1.0", tk.END)
+            app.updater_text.insert(tk.END, out + "\n")
+        app.root.after(0, display_updates)
+        app.set_status("WinGet query finished." if ok else "WinGet query failed; see output.", is_busy=False)
     threading.Thread(target=worker, daemon=True).start()
 
 
@@ -593,9 +613,12 @@ def action_run_winget_upgrade(app):
     """Executes automated upgrade of all apps via WinGet."""
     def worker():
         app.set_status("Upgrading packages via WinGet...", is_busy=True)
-        app.updater_text.insert(tk.END, "\n[Apex] Starting WinGet upgrade all...\n")
+        app.root.after(0, lambda: app.updater_text.insert(tk.END, "\n[Apex] Starting WinGet upgrade all...\n"))
         c, out = app.engine.run_winget_upgrade_all()
-        app.updater_text.insert(tk.END, out + "\n")
+        app.root.after(0, lambda: app.updater_text.insert(tk.END, out + "\n"))
         app.set_status(f"WinGet upgrade completed (code {c}).", is_busy=False)
-        messagebox.showinfo("WinGet Updater", "Application upgrade cycle completed.")
+        if c == 0:
+            app.root.after(0, lambda: messagebox.showinfo("WinGet Updater", "Application upgrade cycle completed."))
+        else:
+            app.root.after(0, lambda: messagebox.showerror("WinGet Updater", f"Application upgrade failed with code {c}. See output for details."))
     threading.Thread(target=worker, daemon=True).start()

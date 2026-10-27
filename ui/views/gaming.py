@@ -14,19 +14,19 @@ from ui.views.common import render_section_hero, create_scrollable_container
 def render_gaming_boost(app, refresh_gpu: bool = False):
     """Renders the Gaming & GPU Boost tab with hardware telemetry and low-latency tweaks."""
     gfx_tweak_defs = [
-        ("enable_hags", "Hardware Accelerated GPU Scheduling", "Passes memory scheduling directly to GPU VRAM for reduced latency (reboot required).", "GPU HAGS", "⚡ DIRECT VRAM TIMING"),
+        ("enable_hags", "Hardware Accelerated GPU Scheduling", "Enables the Windows HAGS setting. A compatible GPU/driver and restart may be required; performance effects vary.", "GPU HAGS", "HAGS SETTING"),
         ("windowed_optimizations", "Windowed Game Optimizations", "Enables the modern flip model presentation for DirectX 10/11 windowed games.", "FLIP MODEL", "🚀 TEAR-FREE FLIP"),
         ("mmcss_priority", "MMCSS Multimedia GPU Priority", "Configures GPU Priority = 8, Priority = 6, and High scheduling category for ultra-smooth frame delivery.", "MMCSS", "🎮 HIGH FRAME RATE")
     ]
 
     latency_tweak_defs = [
-        ("disable_gamedvr", "Disable Xbox Game Bar & DVR", "Stops continuous 60 FPS background recording from consuming GPU encoder bandwidth, VRAM, and disk I/O.", "GAME DVR", "🛑 +15% GPU BANDWIDTH"),
-        ("enable_game_mode", "Windows Native Game Mode", "Prioritizes CPU and GPU resources for active game processes and halts background Windows updates.", "GAME MODE", "⚡ 100% CPU TO GAMES"),
+        ("disable_gamedvr", "Disable Xbox Game Bar & DVR", "Disables Windows Game DVR background capture settings. The effect depends on current capture configuration and apps.", "GAME DVR", "BACKGROUND CAPTURE OFF"),
+        ("enable_game_mode", "Windows Native Game Mode", "Enables Windows Game Mode policy settings. Scheduling behavior depends on Windows, hardware, and workload.", "GAME MODE", "GAME MODE SETTING"),
         ("disable_mouse_acceleration", "1:1 Raw Mouse Input", "Disables Windows 'Enhanced Pointer Precision' for true 1:1 muscle memory mouse tracking in competitive games.", "RAW INPUT", "🎯 ZERO ACCEL DRIFT"),
-        ("network_gaming_latency", "Lower Ping (No Nagle)", "Disables packet buffering delay on network adapters (TcpAckFrequency & TCPNoDelay) for lower ping in online games.", "LOW PING", "🌐 -20MS LATENCY"),
-        ("reset_hpet", "Reset HPET Override Timer", "Removes explicit useplatformclock overrides, fixing micro-stuttering and timer desync.", "HPET", "⏱️ ZERO MICRO-STUTTER"),
-        ("disable_power_throttling", "Disable CPU Power Throttling", "Prevents Windows power throttling from lowering CPU frequencies under intense gaming loads (Desktop).", "THROTTLING", "🔥 100% SUSTAINED CLOCK"),
-        ("ultimate_performance", "Ultimate Performance Power Plan", "Duplicates and activates Windows' hidden Ultimate Performance power plan for 0% latency throttling.", "POWER PLAN", "⚡ 0% IDLE LATENCY")
+        ("network_gaming_latency", "Configure TCP Acknowledgment Settings", "Applies TcpAckFrequency and TCPNoDelay values to network adapters. Latency effects depend on the network and application.", "TCP SETTINGS", "NETWORK ADAPTER POLICY"),
+        ("reset_hpet", "Reset HPET Override Timer", "Removes an explicit useplatformclock override from the boot configuration. Effect on timing depends on hardware and Windows.", "HPET", "REMOVE OVERRIDE"),
+        ("disable_power_throttling", "Disable CPU Power Throttling", "Changes the Windows power-throttling policy on desktops. It does not guarantee a specific processor frequency.", "THROTTLING", "POWER POLICY"),
+        ("ultimate_performance", "Ultimate Performance Power Plan", "Duplicates and activates Windows' Ultimate Performance plan when supported. Power use and performance effects vary.", "POWER PLAN", "ACTIVATE POWER PLAN")
     ]
 
     all_keys = [k[0] for k in gfx_tweak_defs] + [k[0] for k in latency_tweak_defs]

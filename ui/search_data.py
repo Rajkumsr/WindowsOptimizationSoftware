@@ -10,10 +10,10 @@ ALL_SEARCHABLE_TWEAKS = [
     ("irp_stack_size", "system", "Optimize IRP Stack Size", "Sets IRPStackSize to 30, significantly increasing local network transfer throughput."),
     ("fast_shutdown", "system", "Accelerated Service Termination", "Reduces WaitToKillServiceTimeout to 5000ms, preventing stalled services from delaying shutdown."),
     ("long_paths", "system", "Enable NTFS Long File Paths", "Removes legacy MAX_PATH 260-character path limits in Windows file system."),
-    ("block_oem_bloat", "system", "Block OEM Firmware WPBT Software", "Blocks hardware vendors and UEFI firmware from automatically installing bundled promotional software at boot."),
+    ("block_oem_bloat", "system", "Block Device Metadata Downloads", "Sets the Windows policy that prevents downloading device metadata from Microsoft; does not block firmware WPBT software."),
     ("disable_p2p_update", "system", "Disable P2P Update Seeding", "Stops Windows Delivery Optimization from using your upstream bandwidth to seed updates to others."),
     ("f8_boot_menu", "system", "Enable Classic F8 Boot Menu", "Restores the legacy F8 boot selection menu for easy recovery and Safe Mode access."),
-    ("disable_hibernation", "system", "Disable Hibernation (Desktop PC)", "Deletes hiberfil.sys to reclaim disk space equivalent to your total RAM size on desktop PCs."),
+    ("disable_hibernation", "system", "Disable Hibernation (Desktop PC)", "Disables hibernation on desktop PCs and removes hiberfil.sys; the disk space recovered varies by configuration."),
     ("disable_telemetry", "privacy", "Disable Diagnostic Telemetry & CEIP", "Disables DiagTrack, feedback notifications, Windows Error Reporting telemetry, and Customer Experience Program."),
     ("disable_lockscreen_ads", "privacy", "Disable Lock Screen Spotlight Ads", "Prevents Microsoft Spotlight from displaying sponsored tips, recommendations, and advertisements on the lock screen."),
     ("disable_recall", "privacy", "Disable Microsoft Recall AI Tracking", "Blocks automated continuous screenshot captures and AI analysis from the Recall subsystem."),
@@ -41,7 +41,7 @@ ALL_SEARCHABLE_TWEAKS = [
     ("network_gaming_latency", "gaming", "Lower Gaming Ping (Disable Nagle's Algorithm)", "Eliminates network packet buffering delay for instantaneous packet delivery in online games."),
     ("processor_eco", "system", "Processor Eco Boost Capping on Battery", "Limits CPU turbo boost to 85% on battery to eliminate thermal spikes and extend runtime."),
     ("pcie_aspm", "system", "PCIe Link State Power Management (ASPM)", "Puts idle PCIe lanes into maximum power savings on DC power."),
-    ("fast_startup", "system", "Disable Windows Fast Startup", "Stops hybrid kernel hibernation and eliminates 3-5% overnight battery discharge."),
-    ("svchost_split_threshold", "system", "Consolidate SvcHost Processes", "Groups Windows service host processes together on systems with <16GB RAM to save 300MB+ memory."),
+    ("fast_startup", "system", "Disable Windows Fast Startup", "Disables Windows Fast Startup; any effect on off-state battery use depends on the system."),
+    ("svchost_split_threshold", "system", "Configure SvcHost Split Threshold", "Sets the Windows service-host split threshold; memory impact depends on system configuration."),
     ("defender_cpu_cap", "system", "Cap Windows Defender Scan CPU Load", "Limits Defender background antivirus scans to 25% CPU core load to prevent system freezing.")
 ]

@@ -320,9 +320,8 @@ class PowerMixin:
 
     def toggle_processor_eco(self, enable: bool) -> Tuple[bool, str]:
         """
-        Configures CPU energy efficiency and thermal capping on battery (DC):
-        Limits CPU boost frequency to 85% on battery, eliminating fan noise,
-        thermal degradation, and extending screen-on battery runtime by up to 25%.
+        Configures the maximum processor state and energy preference on battery (DC).
+        Effects on performance, temperature, fan noise, and runtime depend on the device.
         """
         throttle_val = 85 if enable else 100
         epp_val = 80 if enable else 50
@@ -444,5 +443,4 @@ class PowerMixin:
                     return True, f"Fast Startup {state_str}."
             self.log(f"Error configuring Fast Startup: {e}", "ERROR")
             return False, str(e)
-
 

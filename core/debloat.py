@@ -3,7 +3,8 @@ Apex Windows Optimizer - Windows AppX Debloater & Telemetry Tasks Mixin
 Provides safe AppX / UWP package uninstallation and disabling of diagnostic scheduled tasks.
 """
 
-from typing import Dict, List, Tuple, Any
+import re
+from typing import Dict, List
 
 
 class DebloatMixin:
@@ -31,29 +32,38 @@ class DebloatMixin:
         self.run_ps("Get-Process | Where-Object { $_.Name -like '*Widget*' -or $_.Name -like '*Copilot*' } | Stop-Process -Force -ErrorAction SilentlyContinue")
 
         for pattern in patterns:
+            if not re.fullmatch(r"\*?[A-Za-z0-9._-]+\*?", pattern):
+                self.log(f"Rejected invalid package pattern: {pattern!r}", "ERROR")
+                continue
+
             self.log(f"Removing packages matching: {pattern}...", "INFO")
             ps = f"""
             try {{
                 Get-Process | Where-Object {{ $_.Name -like '{pattern.replace("*", "")}' }} | Stop-Process -Force -ErrorAction SilentlyContinue
-                $pkgs = @(Get-AppxPackage -AllUsers | Where-Object {{ $_.Name -like '{pattern}' }})
+                $changed = $false
+                $pkgs = @(Get-AppxPackage -AllUsers -ErrorAction Stop | Where-Object {{ $_.Name -like '{pattern}' }})
                 foreach ($p in $pkgs) {{
-                    Remove-AppxPackage -Package $p.PackageFullName -AllUsers -ErrorAction SilentlyContinue
+                    Remove-AppxPackage -Package $p.PackageFullName -AllUsers -ErrorAction Stop
+                    $changed = $true
                 }}
-                $prov = @(Get-AppxProvisionedPackage -Online | Where-Object {{ $_.DisplayName -like '{pattern}' }})
+                $prov = @(Get-AppxProvisionedPackage -Online -ErrorAction Stop | Where-Object {{ $_.DisplayName -like '{pattern}' }})
                 foreach ($pr in $prov) {{
-                    Remove-AppxProvisionedPackage -Online -PackageName $pr.PackageName -ErrorAction SilentlyContinue | Out-Null
+                    Remove-AppxProvisionedPackage -Online -PackageName $pr.PackageName -ErrorAction Stop | Out-Null
+                    $changed = $true
                 }}
-                Write-Output "SUCCESS"
+                if ($changed) {{ Write-Output "OK:{pattern}" }} else {{ Write-Output "NONE:{pattern}" }}
             }} catch {{
-                Write-Output "ERR"
+                Write-Output "ERR:{pattern}:$($_.Exception.Message)"
             }}
             """
             code, out = self.run_ps(ps)
-            if "SUCCESS" in out:
-                self.log(f"Package '{pattern}' uninstalled & unprovisioned.", "SUCCESS")
+            if f"OK:{pattern}" in out and code == 0:
+                self.log(f"Packages matching '{pattern}' were removed or unprovisioned.", "SUCCESS")
                 removed_count += 1
+            elif f"NONE:{pattern}" in out and code == 0:
+                self.log(f"No installed or provisioned packages matched '{pattern}'.", "INFO")
             else:
-                self.log(f"Package '{pattern}' processed.", "INFO")
+                self.log(f"Could not completely remove packages matching '{pattern}': {out}", "ERROR")
         return removed_count
 
     # -------------------------------------------------------------
@@ -78,5 +88,4 @@ class DebloatMixin:
                 disabled += 1
         self.log(f"Disabled {disabled} background telemetry tasks.", "SUCCESS")
         return disabled
-
 

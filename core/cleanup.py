@@ -6,12 +6,11 @@ and shell refresh / DNS cache flushing.
 
 import os
 import sys
-import shutil
 import time
 import tempfile
 import winreg
 import subprocess
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple
 from .base import CREATE_NO_WINDOW
 
 
@@ -40,9 +39,7 @@ class CleanupMixin:
         for target in self.get_cleanup_targets():
             tid = target["id"]
             if tid == "winsxs":
-                # WinSxS consists of NTFS hardlinks; estimate 1.5 - 3.0 GB reclaimable component store
-                est_bytes = 2 * 1024 * 1024 * 1024
-                results[tid] = (est_bytes, "~2.0 GB (DISM)")
+                results[tid] = (0, "Estimate unavailable (DISM)")
                 continue
 
             path = target["path"]
@@ -62,25 +59,27 @@ class CleanupMixin:
             results[tid] = (total_size, self.format_bytes(total_size))
         return results
 
-    def execute_cleanup(self, selected_ids: List[str]) -> Tuple[int, str]:
+    def execute_cleanup(self, selected_ids: List[str]) -> Tuple[int, str, int]:
         targets = {t["id"]: t for t in self.get_cleanup_targets()}
         total_freed = 0
+        total_failures = 0
 
         for cid in selected_ids:
             if cid not in targets:
+                self.log(f"Skipping unknown cleanup target: {cid}", "WARNING")
+                total_failures += 1
                 continue
             target = targets[cid]
 
             # Special handler for WinSxS Component Store via DISM
             if cid == "winsxs":
                 self.log("Starting Windows Component Store (WinSxS) reduction via DISM...", "INFO")
-                code, _ = self.run_cmd("DISM.exe /Online /Cleanup-Image /StartComponentCleanup")
+                code, out = self.run_cmd("DISM.exe /Online /Cleanup-Image /StartComponentCleanup")
                 if code == 0:
-                    reclaimed = 2 * 1024 * 1024 * 1024
-                    total_freed += reclaimed
-                    self.log("WinSxS Component Store cleaned successfully (reclaimed ~2.0 GB).", "SUCCESS")
+                    self.log("DISM component cleanup completed. Reclaimed bytes are not reported by DISM.", "SUCCESS")
                 else:
-                    self.log(f"DISM Component Cleanup completed with exit code {code}.", "WARNING")
+                    self.log(f"DISM component cleanup failed with exit code {code}: {out}", "ERROR")
+                    total_failures += 1
                 continue
 
             path = target["path"]
@@ -88,34 +87,57 @@ class CleanupMixin:
             if not path or not os.path.exists(path):
                 continue
 
-            freed_for_target = 0
-            try:
-                for item in os.listdir(path):
-                    item_path = os.path.join(path, item)
-                    try:
-                        if os.path.isfile(item_path) or os.path.islink(item_path):
-                            sz = os.path.getsize(item_path)
-                            os.remove(item_path)
-                            freed_for_target += sz
-                        elif os.path.isdir(item_path):
-                            sz = 0
-                            for r, d, files in os.walk(item_path):
-                                for f in files:
-                                    try:
-                                        sz += os.path.getsize(os.path.join(r, f))
-                                    except Exception:
-                                        pass
-                            shutil.rmtree(item_path, ignore_errors=True)
-                            freed_for_target += sz
-                    except Exception:
-                        continue
-            except Exception:
-                pass
+            freed_for_target, failures = self._remove_cleanup_contents(path)
             total_freed += freed_for_target
-            self.log(f"Cleaned {target['name']}: {self.format_bytes(freed_for_target)} recovered.", "SUCCESS")
+            total_failures += failures
+            level = "WARNING" if failures else "SUCCESS"
+            self.log(
+                f"Cleaned {target['name']}: {self.format_bytes(freed_for_target)} of file data deleted successfully."
+                + (f" {failures} item(s) could not be removed." if failures else ""),
+                level
+            )
 
-        self.log(f"Deep Clean complete! Total space recovered: {self.format_bytes(total_freed)}", "SUCCESS")
-        return total_freed, self.format_bytes(total_freed)
+        level = "WARNING" if total_failures else "SUCCESS"
+        self.log(
+            f"Deep Clean complete. Confirmed file data deleted: {self.format_bytes(total_freed)}."
+            + (f" {total_failures} item(s) or operation(s) failed." if total_failures else ""),
+            level
+        )
+        return total_freed, self.format_bytes(total_freed), total_failures
+
+    def _remove_cleanup_contents(self, path: str) -> Tuple[int, int]:
+        """Remove a directory's contents without following links; count only successful file deletions."""
+        freed = 0
+        failures = 0
+
+        try:
+            entries = list(os.scandir(path))
+        except OSError as exc:
+            self.log(f"Could not list cleanup directory {path}: {exc}", "WARNING")
+            return 0, 1
+
+        for entry in entries:
+            try:
+                if entry.is_symlink():
+                    os.unlink(entry.path)
+                elif entry.is_file(follow_symlinks=False):
+                    size = entry.stat(follow_symlinks=False).st_size
+                    os.remove(entry.path)
+                    freed += size
+                elif entry.is_dir(follow_symlinks=False):
+                    child_freed, child_failures = self._remove_cleanup_contents(entry.path)
+                    freed += child_freed
+                    failures += child_failures
+                    try:
+                        os.rmdir(entry.path)
+                    except OSError as exc:
+                        failures += 1
+                        self.log(f"Could not remove cleanup directory {entry.path}: {exc}", "WARNING")
+            except OSError as exc:
+                failures += 1
+                self.log(f"Could not remove cleanup item {entry.path}: {exc}", "WARNING")
+
+        return freed, failures
 
     @staticmethod
     def format_bytes(b: int) -> str:
@@ -231,5 +253,3 @@ class CleanupMixin:
         subprocess.Popen(["explorer.exe"], creationflags=CREATE_NO_WINDOW)
         self.log("Windows Explorer restarted.", "SUCCESS")
         return True
-
-

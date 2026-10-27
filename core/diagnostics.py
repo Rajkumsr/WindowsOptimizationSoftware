@@ -174,11 +174,11 @@ class DiagnosticsMixin:
 
     def flush_ram_working_sets(self) -> Tuple[bool, int, float]:
         """
-        Empties process working sets and Standby cache using native Win32 EmptyWorkingSet API.
-        Instantly reclaims 1 GB - 3 GB of trapped memory without killing running apps.
+        Requests Windows to trim accessible process working sets using EmptyWorkingSet.
+        The amount of memory made available varies and applications may fault pages back in.
         Returns: (success, process_count, freed_mb)
         """
-        self.log("Initiating RAM Standby cache & process working set purge...", "INFO")
+        self.log("Requesting a trim of accessible process working sets...", "INFO")
         kernel32 = ctypes.windll.kernel32
         psapi = ctypes.windll.psapi
         PROCESS_SET_QUOTA = 0x0100
@@ -238,12 +238,12 @@ class DiagnosticsMixin:
         high_impact = [
             "network_throttling", "system_responsiveness", "fast_shutdown",
             "disable_telemetry", "optimize_edge", "disable_recall",
-            "hags", "game_mmcss", "power_throttling"
+            "enable_hags", "mmcss_priority", "disable_power_throttling"
         ]
         med_impact = [
             "irp_stack_size", "long_paths", "disable_p2p_update",
             "disable_lockscreen_ads", "disable_office_telemetry",
-            "hpet_reset", "windowed_optimizations"
+            "reset_hpet", "windowed_optimizations"
         ]
 
         score = 40  # base starting score for standard unoptimized Windows installation
@@ -286,7 +286,7 @@ class DiagnosticsMixin:
     def quick_boost(self) -> Tuple[bool, str]:
         """
         Performs a rapid 1-click system boost:
-        1. Purges Standby list & process working sets (frees RAM instantly)
+        1. Requests a trim of accessible process working sets
         2. Cleans system & user temporary files
         3. Flushes DNS resolver cache
         """
@@ -333,5 +333,3 @@ class DiagnosticsMixin:
         )
         self.log(summary.replace("\n", " | "), "SUCCESS")
         return True, summary
-
-

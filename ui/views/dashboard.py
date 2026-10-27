@@ -117,7 +117,7 @@ def render_dashboard(app):
         ("🎮 Gaming & FPS Mode", "Low latency & GPU priority", lambda: apply_gaming_preset(app)),
         ("🔋 Battery Saver Mode", "Max runtime on DC & PCIe ASPM", lambda: apply_battery_preset(app)),
         ("🛡️ Maximum Privacy", "Zero telemetry & tracking", lambda: apply_privacy_preset(app)),
-        ("🔄 Windows Defaults", "Restore stock settings", lambda: apply_defaults_preset(app))
+        ("↩️ Reset Common Tweaks", "Revert supported system, gaming & power settings", lambda: apply_defaults_preset(app))
     ]
 
     for title, subtitle, cmd in presets:
@@ -154,7 +154,7 @@ def render_dashboard(app):
 
     tk.Label(
         h_left,
-        text="⚡  1-Click Instant System Boost & RAM Working Set Purge",
+        text="⚡  Quick System Maintenance & Working Set Trim",
         font=(FONT_FAMILY, 13, "bold"),
         fg=THEME["text_main"],
         bg=THEME["bg_card"]
@@ -162,11 +162,11 @@ def render_dashboard(app):
 
     tk.Label(
         h_left,
-        text="Instantly clears trapped standby memory, temporary caches, and speeds up system responsiveness:\n"
-             "• Purge RAM Standby List and process working sets (instantly frees 1 GB - 3 GB memory)\n"
-             "• Clean system and user temporary caches without closing running programs\n"
-             "• Flush Windows DNS resolver cache to eliminate browsing latency\n"
-             "• Real-time recalibration of Windows Health Score",
+        text="Runs maintenance tasks whose effects depend on system state:\n"
+             "• Requests Windows to trim accessible process working sets; memory reclaimed varies\n"
+             "• Removes accessible files from system and user temporary folders\n"
+             "• Flushes the Windows DNS resolver cache\n"
+             "• Refreshes the app's settings score",
         font=(FONT_FAMILY, 9),
         fg=THEME["text_muted"],
         bg=THEME["bg_card"],
@@ -225,7 +225,7 @@ def render_dashboard(app):
 
     actions = [
         ("🛡️ Create System Restore Point", app.action_create_restore_point),
-        ("🧠 Purge Standby RAM", lambda: action_flush_ram_only(app)),
+        ("🧠 Trim Process Working Sets", lambda: action_flush_ram_only(app)),
         ("📁 Export Registry Backup", app.action_export_reg),
         ("🌐 Flush DNS Cache", app.quick_flush_dns),
         ("🔄 Restart Explorer Shell", app.quick_restart_explorer)
@@ -248,13 +248,29 @@ def render_dashboard(app):
         b.pack(side=tk.LEFT, padx=(0, 8))
 
 
+def _ensure_preset_rollback(app, description: str) -> bool:
+    if app.engine.create_restore_point(description):
+        return True
+
+    message = f"{description} cancelled because rollback protection could not be created."
+    app.engine.log(message, "ERROR")
+    app.set_status("Preset cancelled: rollback protection failed.", is_busy=False)
+    app.root.after(0, lambda: app.show_toast(
+        "Preset Cancelled",
+        "Rollback protection could not be created. No preset changes were applied.",
+        "danger"
+    ))
+    return False
+
+
 def run_quick_optimize(app):
     def worker():
         app.set_status("Applying One-Click Optimization...", is_busy=True)
         app.engine.log("=== Initiating One-Click Quick Optimization ===", "INFO")
         
         # Step 1: Safety Snapshot
-        app.engine.create_restore_point("Apex Quick Optimize Snapshot")
+        if not _ensure_preset_rollback(app, "Apex Quick Optimize Snapshot"):
+            return
 
         # Step 2: System tweaks
         sys_opts = {k: True for k in ["network_throttling", "system_responsiveness", "fast_shutdown", "long_paths", "block_oem_bloat", "disable_p2p_update"]}
@@ -285,16 +301,18 @@ def apply_gaming_preset(app):
     """1-Click Scenario Preset: Gaming & FPS Mode."""
     def worker():
         app.set_status("Applying 1-Click Gaming & FPS Mode Preset...", is_busy=True)
+        if not _ensure_preset_rollback(app, "Apex Gaming Preset Snapshot"):
+            return
         app.engine.apply_system_performance_tweaks({
             "network_throttling": True,
             "system_responsiveness": True,
             "fast_shutdown": True
         })
         app.engine.apply_gaming_tweaks({
-            "hags": True,
+            "enable_hags": True,
             "windowed_optimizations": True,
-            "game_mmcss": True,
-            "power_throttling": True,
+            "mmcss_priority": True,
+            "disable_power_throttling": True,
             "ultimate_performance": True
         })
         app.engine.apply_privacy_telemetry_tweaks({"disable_telemetry": True})
@@ -314,6 +332,8 @@ def apply_battery_preset(app):
     """1-Click Scenario Preset: Battery Saver Mode."""
     def worker():
         app.set_status("Applying 1-Click Battery Saver Preset...", is_busy=True)
+        if not _ensure_preset_rollback(app, "Apex Battery Saver Preset Snapshot"):
+            return
         app.engine.toggle_processor_eco(True)
         app.engine.toggle_pcie_aspm(True)
         app.engine.set_fast_startup(False)
@@ -328,7 +348,7 @@ def apply_battery_preset(app):
             app.root.after(0, lambda: app.switch_tab("dashboard"))
         app.root.after(0, lambda: app.show_toast(
             "Battery Saver Preset Applied",
-            "Capped CPU turbo boost to 85% on DC, activated PCIe ASPM power savings, and prevented hybrid battery drain.",
+            "Set the maximum processor state to 85% on DC, enabled PCIe ASPM, and disabled Fast Startup. Battery-life effects vary by device and usage.",
             "success"
         ))
     threading.Thread(target=worker, daemon=True).start()
@@ -338,6 +358,8 @@ def apply_privacy_preset(app):
     """1-Click Scenario Preset: Maximum Privacy."""
     def worker():
         app.set_status("Applying 1-Click Maximum Privacy Preset...", is_busy=True)
+        if not _ensure_preset_rollback(app, "Apex Maximum Privacy Preset Snapshot"):
+            return
         privacy_opts = {
             "disable_telemetry": True,
             "disable_lockscreen_ads": True,
@@ -349,7 +371,7 @@ def apply_privacy_preset(app):
         app.engine.apply_privacy_telemetry_tweaks(privacy_opts)
         app.engine.disable_telemetry_tasks()
         app.engine.apply_system_performance_tweaks({"disable_p2p_update": True})
-        app.engine.apply_explorer_ui_tweaks({"disable_bing_search": True})
+        app.engine.apply_explorer_ui_tweaks({"disable_start_bing": True})
         app.live_states = app.engine.detect_all_tweak_states()
         app.set_status("Maximum Privacy Preset successfully applied.", is_busy=False)
         if app.active_tab == "dashboard":
@@ -363,9 +385,11 @@ def apply_privacy_preset(app):
 
 
 def apply_defaults_preset(app):
-    """1-Click Scenario Preset: Revert to Windows Stock Defaults."""
+    """Reverts the system, gaming, power, and telemetry settings managed by presets."""
     def worker():
         app.set_status("Reverting to Windows Stock Defaults...", is_busy=True)
+        if not _ensure_preset_rollback(app, "Apex Windows Defaults Snapshot"):
+            return
         app.engine.apply_system_performance_tweaks({
             "network_throttling": False,
             "system_responsiveness": False,
@@ -374,18 +398,22 @@ def apply_defaults_preset(app):
             "disable_p2p_update": False
         })
         app.engine.apply_gaming_tweaks({
-            "power_throttling": False,
-            "game_mmcss": False
+            "enable_hags": False,
+            "windowed_optimizations": False,
+            "mmcss_priority": False,
+            "disable_power_throttling": False,
+            "ultimate_performance": False
         })
+        app.engine.apply_privacy_telemetry_tweaks({"disable_telemetry": False})
         app.engine.toggle_processor_eco(False)
         app.engine.toggle_pcie_aspm(False)
         app.live_states = app.engine.detect_all_tweak_states()
-        app.set_status("Reverted to Windows stock defaults.", is_busy=False)
+        app.set_status("Supported preset settings reverted.", is_busy=False)
         if app.active_tab == "dashboard":
             app.root.after(0, lambda: app.switch_tab("dashboard"))
         app.root.after(0, lambda: app.show_toast(
-            "Windows Defaults Restored",
-            "Managed system, power, and gaming settings restored to default Windows stock configuration.",
+            "Common Preset Settings Reverted",
+            "Reverted supported system, gaming, power, and telemetry settings. App removals, services, and other privacy or shell settings are unchanged.",
             "info"
         ))
     threading.Thread(target=worker, daemon=True).start()
@@ -395,21 +423,29 @@ def action_quick_boost(app):
     def worker():
         app.set_status("Executing 1-Click Instant System Boost...", is_busy=True)
         ok, summary = app.engine.quick_boost()
-        app.set_status("1-Click Boost completed successfully.", is_busy=False)
+        app.set_status("Quick maintenance completed." if ok else "Quick maintenance reported a failure.", is_busy=False)
         if app.active_tab == "dashboard":
             app.root.after(0, lambda: app.switch_tab("dashboard"))
         if hasattr(app, 'tray_manager') and app.tray_manager:
-            app.tray_manager.notify("1-Click Boost complete! Memory freed and temp caches wiped.", "Apex Windows Optimizer")
-        app.root.after(0, lambda: app.show_toast("1-Click Boost Complete", "Freed standby RAM memory, wiped temp caches, and flushed DNS cache.", "boost"))
+            app.tray_manager.notify("Quick maintenance finished. See the app for details.", "Apex Windows Optimizer")
+        app.root.after(0, lambda: app.show_toast(
+            "Quick Maintenance Complete" if ok else "Quick Maintenance Warning",
+            summary,
+            "boost" if ok else "warning"
+        ))
     threading.Thread(target=worker, daemon=True).start()
 
 
 def action_flush_ram_only(app):
     def worker():
-        app.set_status("Purging RAM Standby list and process working sets...", is_busy=True)
+        app.set_status("Requesting a process working-set trim...", is_busy=True)
         ok, count, freed_mb = app.engine.flush_ram_working_sets()
-        app.set_status(f"Flushed {count} processes, freed {freed_mb:.1f} MB RAM.", is_busy=False)
+        app.set_status(f"Requested working-set trim for {count} processes; available memory changed by {freed_mb:.1f} MB.", is_busy=False)
         if app.active_tab == "dashboard":
             app.root.after(0, lambda: app.switch_tab("dashboard"))
-        app.root.after(0, lambda: app.show_toast("RAM Working Set Purge", f"Flushed working sets for {count} processes. Reclaimed {freed_mb:.1f} MB RAM.", "success"))
+        app.root.after(0, lambda: app.show_toast(
+            "Process Working-Set Trim",
+            f"Requested a working-set trim for {count} processes. Available memory changed by {freed_mb:.1f} MB.",
+            "success" if ok else "warning"
+        ))
     threading.Thread(target=worker, daemon=True).start()

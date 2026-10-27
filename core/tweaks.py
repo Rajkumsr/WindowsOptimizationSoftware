@@ -325,7 +325,7 @@ class TweaksMixin:
             if ok:
                 success_count += 1
 
-        # Disable Fast Startup (Stop phantom shutdown drain)
+        # Disable Fast Startup
         if "fast_startup" in options:
             ok, _ = self.set_fast_startup(not options["fast_startup"])
             if ok:
@@ -338,7 +338,7 @@ class TweaksMixin:
                 s1 = self.set_reg(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\CurrentControlSet\Control", "SvcHostSplitThresholdInKB", 380000, winreg.REG_DWORD)
                 s2 = self.set_reg(winreg.HKEY_LOCAL_MACHINE, r"SYSTEM\ControlSet001\Control", "SvcHostSplitThresholdInKB", 380000, winreg.REG_DWORD)
                 if s1 or s2:
-                    self.log("SvcHost split threshold optimized (consolidates processes to conserve 300MB+ RAM).", "SUCCESS")
+                    self.log("SvcHost split threshold configured. Memory impact depends on services and system configuration.", "SUCCESS")
                     success_count += 1
             else:
                 self.log("Reverting SvcHost process splitting threshold to Windows default...", "INFO")
@@ -531,5 +531,4 @@ class TweaksMixin:
             _apply_to_target_hive("HKCU")
 
         return success_count
-
 
